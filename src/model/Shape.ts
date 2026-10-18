@@ -156,7 +156,7 @@ export abstract class Shape {
     return markup;
   }
 
-  protected static formatNumber(value: number): string {
+  static formatNumber(value: number): string {
     if (!Number.isFinite(value)) {
       throw new InvalidNumberError(String(value));
     }
@@ -166,7 +166,7 @@ export abstract class Shape {
     return String(Math.round(value * 1e6) / 1e6);
   }
 
-  protected static parseNumber(value: string): number {
+  static parseNumber(value: string): number {
     if (value.trim().length === 0) {
       throw new InvalidNumberError(value);
     }

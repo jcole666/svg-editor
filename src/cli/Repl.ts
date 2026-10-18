@@ -1,21 +1,25 @@
 import * as readline from 'node:readline';
+
+import { Session } from '../app/Session';
+import { CommandRegistry } from '../commands/CommandRegistry';
 import { Tokenizer } from './Tokenizer';
 
 /**
- * REPL（Read-Eval-Print Loop）：读一行 -> 解析 -> 执行 -> 打印 -> 循环。
+ * REPL（Read-Eval-Print Loop）：读一行 -> 分词 -> 找命令 -> 执行 -> 打印 -> 循环。
  *
  * 在命令模式里，Repl 承担 Invoker 的角色：
- *   - 它负责"发起"请求
- *   - 它不负责"怎么改图形"（那是 Document / Receiver 的事）
- *   - undo / redo 的栈也归它持有（P5 阶段接入）
+ *   - 负责"发起"请求，不负责"怎么改图形"（那是 Document / Receiver 的事）
+ *   - 命令对象由 CommandRegistry 造出来，Repl 只调 execute()
+ *   - undo / redo 的栈在 P5 接入，届时也归这里持有
  */
 export class Repl {
-  private readonly tokenizer: Tokenizer;
+  private readonly tokenizer = new Tokenizer();
+  private readonly session = new Session();
+  private readonly registry = new CommandRegistry();
   private readonly rl: readline.Interface;
   private stopped = false;
 
   constructor() {
-    this.tokenizer = new Tokenizer();
     this.rl = readline.createInterface({
       input: process.stdin,
       output: process.stdout,
@@ -23,7 +27,6 @@ export class Repl {
     });
   }
 
-  /** 启动 REPL：打印横幅，然后进入逐行循环。 */
   start(): void {
     console.log("svg-editor 0.1 — type 'help' for commands");
     this.rl.prompt();
@@ -33,7 +36,6 @@ export class Repl {
         return;
       }
       this.handleLine(line);
-      // 命令可能已经关掉了 REPL（exit / quit），此时不能再 prompt
       if (!this.stopped) {
         this.rl.prompt();
       }
@@ -44,14 +46,8 @@ export class Repl {
     });
   }
 
-  /**
-   * 处理一行输入。
-   * P0 阶段：只做分词和"还不认识"的兜底；具体命令在 P2 / P3 逐步接入。
-   */
   private handleLine(line: string): void {
     const tokens = this.tokenizer.tokenize(line);
-
-    // 空行或整行注释：什么都不做，直接回到提示符
     if (tokens.length === 0) {
       return;
     }
@@ -63,17 +59,29 @@ export class Repl {
       return;
     }
 
-    if (name === 'help') {
-      console.log('svg-editor 0.1 — 命令将在后续阶段接入');
+    const spec = this.registry.get(name);
+    if (spec === undefined) {
+      console.log(`error: unknown command: ${name}`);
       return;
     }
 
-    console.log(`error: unknown command: ${name}`);
+    const args = tokens.slice(1);
+    try {
+      const command = spec.create(args, this.session);
+      for (const outputLine of command.execute()) {
+        console.log(outputLine);
+      }
+    } catch (error) {
+      console.log(`error: ${Repl.messageOf(error)}`);
+    }
   }
 
-  /** 关闭输入流，结束 REPL。 */
   private stop(): void {
     this.stopped = true;
     this.rl.close();
+  }
+
+  private static messageOf(error: unknown): string {
+    return error instanceof Error ? error.message : String(error);
   }
 }
