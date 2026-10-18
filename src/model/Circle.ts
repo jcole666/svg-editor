@@ -37,6 +37,10 @@ export class Circle extends Shape {
     );
   }
 
+  geometryAttributes(): string[] {
+    return ['cx', 'cy', 'r'];
+  }
+
   referencePoint(): { x: number; y: number } {
     return { x: this.cx, y: this.cy };
   }

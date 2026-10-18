@@ -84,6 +84,22 @@ export class Document {
   }
 
   /**
+   * 在指定父容器的指定下标处插入图形（undo 原位恢复用）。
+   * index 越界时退化为追加到末尾。
+   */
+  insert(shape: Shape, parent: Group | null, index: number): void {
+    this.registerSubtree(shape);
+    if (parent === null) {
+      const position = index < 0 || index > this.rootShapes.length ? this.rootShapes.length : index;
+      this.rootShapes.splice(position, 0, shape);
+      shape.attachTo(null);
+    } else {
+      const position = index < 0 || index > parent.children().length ? parent.children().length : index;
+      parent.addChild(shape, position);
+    }
+  }
+
+  /**
    * 摘除图形（含子孙），返回它原来的父子位置。
    *
    * 返回 parent / index 是给 P5 的 undo 用的：恢复时必须放回原父容器的原位，

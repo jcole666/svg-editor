@@ -40,6 +40,10 @@ export class TextShape extends Shape {
     );
   }
 
+  geometryAttributes(): string[] {
+    return ['x', 'y', 'text'];
+  }
+
   referencePoint(): { x: number; y: number } {
     return { x: this.x, y: this.y };
   }

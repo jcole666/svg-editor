@@ -1,16 +1,16 @@
 import type { Document } from '../model/Document';
 import { NoDocumentError } from '../model/NoDocumentError';
-import { SnapshotHistory } from './SnapshotHistory';
+import { CommandStack } from './CommandStack';
 
 /**
- * 一次 REPL 会话的状态：当前文档 + 撤销历史。
+ * 一次 REPL 会话的状态：当前文档 + 命令栈。
  *
- * 命令对象只认识"当前文档"；undo/redo 的历史由这里统一持有，
- * Repl 负责把命令按 kind 分派给历史或直接执行。
+ * 命令对象只认识"当前文档"；撤销历史由 CommandStack 持有，
+ * Repl 通过 CommandExecutor 把两者接起来。
  */
 export class Session {
   private currentDocument: Document | null = null;
-  readonly history = new SnapshotHistory();
+  readonly commandStack = new CommandStack();
 
   get document(): Document | null {
     return this.currentDocument;

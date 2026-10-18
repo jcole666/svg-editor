@@ -65,6 +65,11 @@ export class Group extends Shape {
     return '';
   }
 
+  /** 容器自身没有几何属性；子孙各自的几何由快照逐节点记录。 */
+  geometryAttributes(): string[] {
+    return [];
+  }
+
   /** 容器没有单一坐标，move 反馈改用 "moved by (dx,dy)"。 */
   referencePoint(): { x: number; y: number } | null {
     return null;

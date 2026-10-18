@@ -41,6 +41,10 @@ export class Rect extends Shape {
     );
   }
 
+  geometryAttributes(): string[] {
+    return ['x', 'y', 'width', 'height'];
+  }
+
   referencePoint(): { x: number; y: number } {
     return { x: this.x, y: this.y };
   }

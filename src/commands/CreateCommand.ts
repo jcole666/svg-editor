@@ -1,8 +1,9 @@
 import type { Session } from '../app/Session';
+import type { UndoableCommand } from '../app/UndoableCommand';
 import { Group } from '../model/Group';
 import { NoSuchContainerError } from '../model/NoSuchContainerError';
 import { NotAContainerError } from '../model/NotAContainerError';
-import type { Command } from './Command';
+import type { Shape } from '../model/Shape';
 import type { ShapeFactory } from './ShapeFactory';
 import { UsageError } from './UsageError';
 
@@ -11,9 +12,12 @@ import { UsageError } from './UsageError';
  *
  * 只做三件事：解析出 type / id / params / 可选容器、校验容器、交给工厂造出来。
  * "图形长什么样"和"参数怎么解析"都在 ShapeFactory 里，命令本身不含业务逻辑。
+ *
+ * undo：把自己创建的那个图形删掉（记住引用，不需要回查 id）。
  */
-export class CreateCommand implements Command {
+export class CreateCommand implements UndoableCommand {
   readonly kind = 'edit' as const;
+  private createdShape: Shape | null = null;
 
   constructor(
     private readonly args: string[],
@@ -42,12 +46,25 @@ export class CreateCommand implements Command {
     const shape = this.factory.create(typeName, id, params);
 
     document.add(shape, container ?? undefined);
+    this.createdShape = shape;
 
     return [
       container === undefined
         ? `${shape.label()} created`
         : `${shape.label()} created in ${container.label()}`,
     ];
+  }
+
+  undo(): string[] {
+    const shape = this.createdShape;
+    if (shape === null) {
+      throw new Error('create command has no shape to undo');
+    }
+
+    this.session.requireDocument().remove(shape.id);
+    this.createdShape = null;
+
+    return [`${shape.label()} creation undone`];
   }
 
   private resolveContainer(containerId: string): Group {

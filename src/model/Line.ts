@@ -39,6 +39,10 @@ export class Line extends Shape {
     );
   }
 
+  geometryAttributes(): string[] {
+    return ['x1', 'y1', 'x2', 'y2'];
+  }
+
   referencePoint(): { x: number; y: number } {
     return { x: this.x1, y: this.y1 };
   }

@@ -52,6 +52,9 @@ export abstract class Shape {
   /** 几何部分的紧凑摘要，用于 tree / show。 */
   abstract geometrySummary(): string;
 
+  /** 本类型拥有的几何属性名，用于几何快照与精确还原（undo 用）。 */
+  abstract geometryAttributes(): string[];
+
   /**
    * move 反馈用的参照点（如 rect 的左上角、circle 的圆心）。
    * 容器没有单一坐标，返回 null —— 反馈会改用 "moved by (dx,dy)"。
@@ -98,6 +101,20 @@ export abstract class Shape {
   /** 从外部 SVG 还原属性时使用：绕过 set 白名单，原样保留。 */
   restoreAttribute(name: string, value: string): void {
     this.presentation.set(name, value);
+  }
+
+  /**
+   * 删除一个非几何属性（undo 用）。
+   * 例如原本没有 fill，`set r1 fill red` 的 undo 要把 fill 整个去掉，
+   * 而不是设成空字符串。
+   */
+  removeAttribute(name: string): void {
+    this.presentation.delete(name);
+  }
+
+  /** 该属性当前是否被设置过（用于判断 undo 时应该还原还是删除）。 */
+  hasAttribute(name: string): boolean {
+    return this.getAttr(name) !== undefined;
   }
 
   /**

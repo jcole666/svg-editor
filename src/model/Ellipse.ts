@@ -41,6 +41,10 @@ export class Ellipse extends Shape {
     );
   }
 
+  geometryAttributes(): string[] {
+    return ['cx', 'cy', 'rx', 'ry'];
+  }
+
   referencePoint(): { x: number; y: number } {
     return { x: this.cx, y: this.cy };
   }
