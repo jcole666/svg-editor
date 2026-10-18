@@ -5,11 +5,13 @@ import { DeleteCommand } from './DeleteCommand';
 import { HelpCommand } from './HelpCommand';
 import { InitCommand } from './InitCommand';
 import { MoveCommand } from './MoveCommand';
+import { RedoCommand } from './RedoCommand';
 import { ScaleCommand } from './ScaleCommand';
 import { SetCommand } from './SetCommand';
 import { ShapeFactory } from './ShapeFactory';
 import { ShowCommand } from './ShowCommand';
 import { TreeCommand } from './TreeCommand';
+import { UndoCommand } from './UndoCommand';
 
 /**
  * 命令注册表：命令名 → 规格（含工厂）。
@@ -83,6 +85,20 @@ export class CommandRegistry {
       usage: 'delete <id>',
       description: '删除图形（容器则连同全部子孙）',
       create: (args, session) => new DeleteCommand(args, session),
+    });
+
+    // ---- 撤销重做（不进入 undo 栈）----
+    this.register({
+      name: 'undo',
+      usage: 'undo',
+      description: '撤销上一次编辑命令',
+      create: (_args, session) => new UndoCommand(session),
+    });
+    this.register({
+      name: 'redo',
+      usage: 'redo',
+      description: '重做；undo 后若有新编辑，redo 栈清空',
+      create: (_args, session) => new RedoCommand(session),
     });
 
     // ---- 显示类（不进入 undo 栈）----

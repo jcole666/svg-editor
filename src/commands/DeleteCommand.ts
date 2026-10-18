@@ -8,6 +8,8 @@ import { UsageError } from './UsageError';
  * P4 阶段只做删除。P5 会在此基础上记录被删对象与原位置，以便 undo 原位恢复。
  */
 export class DeleteCommand implements Command {
+  readonly kind = 'edit' as const;
+
   constructor(
     private readonly args: string[],
     private readonly session: Session,

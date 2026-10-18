@@ -1,5 +1,6 @@
 import * as readline from 'node:readline';
 
+import { CommandExecutor } from '../app/CommandExecutor';
 import { Session } from '../app/Session';
 import { CommandRegistry } from '../commands/CommandRegistry';
 import { Tokenizer } from './Tokenizer';
@@ -9,13 +10,14 @@ import { Tokenizer } from './Tokenizer';
  *
  * 在命令模式里，Repl 承担 Invoker 的角色：
  *   - 负责"发起"请求，不负责"怎么改图形"（那是 Document / Receiver 的事）
- *   - 命令对象由 CommandRegistry 造出来，Repl 只调 execute()
- *   - undo / redo 的栈在 P5 接入，届时也归这里持有
+ *   - 命令对象由 CommandRegistry 造出来
+ *   - 执行与撤销历史的衔接交给 CommandExecutor
  */
 export class Repl {
   private readonly tokenizer = new Tokenizer();
   private readonly session = new Session();
   private readonly registry = new CommandRegistry();
+  private readonly executor = new CommandExecutor(this.session);
   private readonly rl: readline.Interface;
   private stopped = false;
 
@@ -68,7 +70,7 @@ export class Repl {
     const args = tokens.slice(1);
     try {
       const command = spec.create(args, this.session);
-      for (const outputLine of command.execute()) {
+      for (const outputLine of this.executor.execute(command)) {
         console.log(outputLine);
       }
     } catch (error) {

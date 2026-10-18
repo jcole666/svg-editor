@@ -11,6 +11,8 @@ import { UsageError } from './UsageError';
  * 因子必须为正数（§4.2）。
  */
 export class ScaleCommand implements Command {
+  readonly kind = 'edit' as const;
+
   constructor(
     private readonly args: string[],
     private readonly session: Session,

@@ -9,6 +9,8 @@ import { UsageError } from './UsageError';
  * 白名单外抛 UnknownAttributeError（§4.2 的 unknown attribute）。
  */
 export class SetCommand implements Command {
+  readonly kind = 'edit' as const;
+
   constructor(
     private readonly args: string[],
     private readonly session: Session,

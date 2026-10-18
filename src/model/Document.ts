@@ -112,6 +112,16 @@ export class Document {
     return this.shapesById.size;
   }
 
+  /** 深拷贝整份文档（P5 的快照法用它做撤销；Command 模式版本不再依赖它）。 */
+  clone(): Document {
+    const copy = new Document(this.canvasWidth, this.canvasHeight);
+    copy.sourceFilePath = this.sourceFilePath;
+    for (const shape of this.rootShapes) {
+      copy.add(shape.clone());
+    }
+    return copy;
+  }
+
   /** 渲染整份文档（不含 XML 声明，由写入器补）。 */
   toSvg(): string {
     const width = Shape.formatNumber(this.canvasWidth);

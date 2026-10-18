@@ -1,13 +1,16 @@
 import type { Document } from '../model/Document';
 import { NoDocumentError } from '../model/NoDocumentError';
+import { SnapshotHistory } from './SnapshotHistory';
 
 /**
- * 一次 REPL 会话的状态：当前打开的是哪份文档。
+ * 一次 REPL 会话的状态：当前文档 + 撤销历史。
  *
- * P5 之后 undo/redo 的命令栈也挂在这里，Repl 只负责把命令交给它。
+ * 命令对象只认识"当前文档"；undo/redo 的历史由这里统一持有，
+ * Repl 负责把命令按 kind 分派给历史或直接执行。
  */
 export class Session {
   private currentDocument: Document | null = null;
+  readonly history = new SnapshotHistory();
 
   get document(): Document | null {
     return this.currentDocument;

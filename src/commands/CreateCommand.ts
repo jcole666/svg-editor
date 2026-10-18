@@ -13,6 +13,8 @@ import { UsageError } from './UsageError';
  * "图形长什么样"和"参数怎么解析"都在 ShapeFactory 里，命令本身不含业务逻辑。
  */
 export class CreateCommand implements Command {
+  readonly kind = 'edit' as const;
+
   constructor(
     private readonly args: string[],
     private readonly session: Session,

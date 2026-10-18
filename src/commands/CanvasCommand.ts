@@ -1,6 +1,6 @@
 import type { Session } from '../app/Session';
 import { Shape } from '../model/Shape';
-import type { Command } from './Command';
+import type { Command, CommandKind } from './Command';
 import { UsageError } from './UsageError';
 
 /**
@@ -9,6 +9,11 @@ import { UsageError } from './UsageError';
  * 属于"文档类"命令：修改尺寸后 undo/redo 应被禁止（§4.3）。
  */
 export class CanvasCommand implements Command {
+  /** 无参数只是查询（display）；带尺寸就是文档类修改（io，§4.3）。 */
+  get kind(): CommandKind {
+    return this.args.length === 0 ? 'display' : 'io';
+  }
+
   constructor(
     private readonly args: string[],
     private readonly session: Session,

@@ -10,6 +10,8 @@ import { UsageError } from './UsageError';
  * 反馈格式对齐任务书：叶子用 "moved to (x,y)"，容器用 "moved by (dx,dy)"。
  */
 export class MoveCommand implements Command {
+  readonly kind = 'edit' as const;
+
   constructor(
     private readonly args: string[],
     private readonly session: Session,

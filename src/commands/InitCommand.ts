@@ -10,6 +10,8 @@ import { UsageError } from './UsageError';
  * 属于"文档类"命令：执行后 undo/redo 应被禁止（§4.3），P5 接入命令栈时处理。
  */
 export class InitCommand implements Command {
+  readonly kind = 'io' as const;
+
   constructor(
     private readonly args: string[],
     private readonly session: Session,
