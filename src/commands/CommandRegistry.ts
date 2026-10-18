@@ -1,7 +1,9 @@
 import { CanvasCommand } from './CanvasCommand';
 import type { CommandSpec } from './CommandSpec';
+import { CreateCommand } from './CreateCommand';
 import { HelpCommand } from './HelpCommand';
 import { InitCommand } from './InitCommand';
+import { ShapeFactory } from './ShapeFactory';
 import { ShowCommand } from './ShowCommand';
 import { TreeCommand } from './TreeCommand';
 
@@ -14,6 +16,7 @@ import { TreeCommand } from './TreeCommand';
  */
 export class CommandRegistry {
   private readonly specs = new Map<string, CommandSpec>();
+  private readonly shapeFactory = new ShapeFactory();
 
   constructor() {
     this.registerDefaults();
@@ -44,6 +47,14 @@ export class CommandRegistry {
       usage: 'canvas [w] [h]',
       description: '无参数显示画布尺寸；带参数修改尺寸',
       create: (args, session) => new CanvasCommand(args, session),
+    });
+
+    // ---- 图形编辑类（可 undo/redo，P5 接入命令栈）----
+    this.register({
+      name: 'create',
+      usage: 'create <type> <id> [params...] [in <containerId>]',
+      description: '创建图形：rect/circle/ellipse/line/text/g',
+      create: (args, session) => new CreateCommand(args, session, this.shapeFactory),
     });
 
     // ---- 显示类（不进入 undo 栈）----

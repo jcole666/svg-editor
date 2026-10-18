@@ -4,14 +4,19 @@
  * 规则（任务书 §2 通用约定）：
  *   - 空白分隔参数
  *   - 双引号包裹的整段算一个参数（主要用于 text 的内容），例如 "My Diagram"
- *   - `#` 到行尾是注释，便于把手打命令序列存成脚本回放
+ *   - `#` **开头**的整行是注释，便于把手打命令序列存成脚本回放
  *
- * 例：
- *   create text title 20 40 "My Diagram"   ->  ['create','text','title','20','40','My Diagram']
- *   create circle c1 100 100 20 red # 注释  ->  ['create','circle','c1','100','100','20','red']
+ * 关键细节：`#` 只在**行首**才是注释，行内不算。
+ * 任务书 §6.1 的 `create rect start 120 100 160 60 #4a90d9 in node1` 里，
+ * `#4a90d9` 是颜色值；若把行内 `#` 当注释，颜色和后面的 `in` 子句都会丢。
  */
 export class Tokenizer {
   tokenize(line: string): string[] {
+    // 整行注释：第一个非空白字符是 #
+    if (line.trimStart().startsWith('#')) {
+      return [];
+    }
+
     const tokens: string[] = [];
     let current = '';
     let inQuotes = false;
@@ -27,10 +32,6 @@ export class Tokenizer {
           current += ch;
         }
         continue;
-      }
-
-      if (ch === '#') {
-        break; // 注释开始，丢掉后面全部
       }
 
       if (ch === '"') {

@@ -1,28 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
-import { Session } from '../../src/app/Session';
 import { CommandRegistry } from '../../src/commands/CommandRegistry';
 import { UsageError } from '../../src/commands/UsageError';
-import { Tokenizer } from '../../src/cli/Tokenizer';
 import { InvalidNumberError } from '../../src/model/InvalidNumberError';
 import { NoDocumentError } from '../../src/model/NoDocumentError';
 import { NoSuchShapeError } from '../../src/model/NoSuchShapeError';
-
-function createRunner(): (line: string) => string[] {
-  const session = new Session();
-  const registry = new CommandRegistry();
-  const tokenizer = new Tokenizer();
-
-  return (line: string): string[] => {
-    const tokens = tokenizer.tokenize(line);
-    const [name, ...args] = tokens;
-    const spec = registry.get(name);
-    if (spec === undefined) {
-      throw new Error(`unknown command: ${name}`);
-    }
-    return spec.create(args, session).execute();
-  };
-}
+import { createRunner } from '../helpers';
 
 describe('P2 只读命令与文档命令', () => {
   it('init 无参数使用 800x600', () => {
@@ -97,6 +80,6 @@ describe('P2 只读命令与文档命令', () => {
   it('注册表能区分已注册与未注册命令', () => {
     const registry = new CommandRegistry();
     expect(registry.get('init')).toBeDefined();
-    expect(registry.get('create')).toBeUndefined();
+    expect(registry.get('no-such-command')).toBeUndefined();
   });
 });
