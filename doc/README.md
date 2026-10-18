@@ -93,6 +93,17 @@ io   →  model
 
 ---
 
+### 阶段 P4：编辑命令与 Composite 统一操作
+
+- `move` / `scale` / `set` / `delete` 四条命令**不包含任何业务逻辑**：移动是 `shape.moveBy()`、缩放是 `shape.scaleBy()`、删除是 `document.remove()`。命令只做参数校验 + 转发（命令模式 p17、p20）。
+- **Composite 第一次真正落地**：同一条 `move node1 0 100`，对叶子是"改自己的坐标"，对容器是"递归转发给每个子孙"。调用方 `MoveCommand` 完全不知道自己拿到的是哪一种——这就是任务书 §2.1「容器与叶子统一操作」的可运行证据。
+- **设计判断 1（从示例反推反馈格式）**：任务书里 `move` 有两种回显——§6 的叶子是 `circle#c1 moved to (130,100)`（绝对坐标），§6.1 的容器是 `g#node2 moved by (0,100)`（位移量）。据此在 `Shape` 上新增 `referencePoint()`：叶子返回参照点（rect 左上角、circle 圆心等），容器返回 `null` 并触发 `moved by`。规格只给了样例、没给规则时，就按样例反推出一个能同时满足两者的抽象。
+- **设计判断 2（为 undo 预留结构）**：`Document.remove()` 不返回删除的图形本身，而是返回 `{ shape, parent, index }`。原因是 P5 的 undo 必须把图形放回**原父容器的原下标**，否则兄弟顺序变化会让 z-order 错乱。结构提前定好，P5 就不用返工。
+- **设计判断 3（校验先于变形）**：`scale` 的因子校验在调用 `scaleBy` 之前；`scale r1 0` 抛 `scale factor must be positive`（§4.2）后，几何保持不变——测试里专门断言了这一点。
+- 测试 71 → **89 个**。
+
+---
+
 ## 三、一致性自查
 
 > 实现完成后填写，对照方案如实回答两个问题。

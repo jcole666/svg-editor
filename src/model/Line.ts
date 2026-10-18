@@ -39,6 +39,10 @@ export class Line extends Shape {
     );
   }
 
+  referencePoint(): { x: number; y: number } {
+    return { x: this.x1, y: this.y1 };
+  }
+
   moveBy(dx: number, dy: number): void {
     this.x1 += dx;
     this.y1 += dy;

@@ -52,6 +52,12 @@ export abstract class Shape {
   /** 几何部分的紧凑摘要，用于 tree / show。 */
   abstract geometrySummary(): string;
 
+  /**
+   * move 反馈用的参照点（如 rect 的左上角、circle 的圆心）。
+   * 容器没有单一坐标，返回 null —— 反馈会改用 "moved by (dx,dy)"。
+   */
+  abstract referencePoint(): { x: number; y: number } | null;
+
   /** 平移（增量）。容器递归到每个子孙。 */
   abstract moveBy(dx: number, dy: number): void;
 

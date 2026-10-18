@@ -65,6 +65,11 @@ export class Group extends Shape {
     return '';
   }
 
+  /** 容器没有单一坐标，move 反馈改用 "moved by (dx,dy)"。 */
+  referencePoint(): { x: number; y: number } | null {
+    return null;
+  }
+
   moveBy(dx: number, dy: number): void {
     for (const child of this.childNodes) {
       child.moveBy(dx, dy);

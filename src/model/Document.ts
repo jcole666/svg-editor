@@ -3,6 +3,13 @@ import { Group } from './Group';
 import { NoSuchShapeError } from './NoSuchShapeError';
 import { Shape } from './Shape';
 
+/** remove() 的结果：图形本身 + 它原来的父子位置。 */
+export interface RemovedShape {
+  readonly shape: Shape;
+  readonly parent: Group | null;
+  readonly index: number;
+}
+
 /**
  * 当前打开的文档 —— 命令模式里的 Receiver（业务层）。
  *
@@ -76,6 +83,31 @@ export class Document {
     }
   }
 
+  /**
+   * 摘除图形（含子孙），返回它原来的父子位置。
+   *
+   * 返回 parent / index 是给 P5 的 undo 用的：恢复时必须放回原父容器的原位，
+   * 否则兄弟顺序变了，z-order 就错了。
+   */
+  remove(id: string): RemovedShape {
+    const shape = this.require(id);
+    const parent = shape.parent;
+    const siblings = parent === null ? this.rootShapes : parent.children();
+    const index = siblings.indexOf(shape);
+
+    if (parent === null) {
+      const rootIndex = this.rootShapes.indexOf(shape);
+      if (rootIndex >= 0) {
+        this.rootShapes.splice(rootIndex, 1);
+      }
+    } else {
+      parent.removeChild(shape);
+    }
+
+    this.unregisterSubtree(shape);
+    return { shape, parent, index };
+  }
+
   countShapes(): number {
     return this.shapesById.size;
   }
@@ -103,6 +135,15 @@ export class Document {
     if (shape instanceof Group) {
       for (const child of shape.children()) {
         this.registerSubtree(child);
+      }
+    }
+  }
+
+  private unregisterSubtree(shape: Shape): void {
+    this.shapesById.delete(shape.id);
+    if (shape instanceof Group) {
+      for (const child of shape.children()) {
+        this.unregisterSubtree(child);
       }
     }
   }

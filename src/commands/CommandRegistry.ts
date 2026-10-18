@@ -1,8 +1,12 @@
 import { CanvasCommand } from './CanvasCommand';
 import type { CommandSpec } from './CommandSpec';
 import { CreateCommand } from './CreateCommand';
+import { DeleteCommand } from './DeleteCommand';
 import { HelpCommand } from './HelpCommand';
 import { InitCommand } from './InitCommand';
+import { MoveCommand } from './MoveCommand';
+import { ScaleCommand } from './ScaleCommand';
+import { SetCommand } from './SetCommand';
 import { ShapeFactory } from './ShapeFactory';
 import { ShowCommand } from './ShowCommand';
 import { TreeCommand } from './TreeCommand';
@@ -55,6 +59,30 @@ export class CommandRegistry {
       usage: 'create <type> <id> [params...] [in <containerId>]',
       description: '创建图形：rect/circle/ellipse/line/text/g',
       create: (args, session) => new CreateCommand(args, session, this.shapeFactory),
+    });
+    this.register({
+      name: 'move',
+      usage: 'move <id> <dx> <dy>',
+      description: '平移（增量）；作用于容器时整体平移',
+      create: (args, session) => new MoveCommand(args, session),
+    });
+    this.register({
+      name: 'scale',
+      usage: 'scale <id> <factor>',
+      description: '等比缩放（因子须为正数）；作用于容器时递归到每个子孙',
+      create: (args, session) => new ScaleCommand(args, session),
+    });
+    this.register({
+      name: 'set',
+      usage: 'set <id> <attr> <value>',
+      description: '设置属性：fill / stroke / stroke-width / 自身几何属性 / text',
+      create: (args, session) => new SetCommand(args, session),
+    });
+    this.register({
+      name: 'delete',
+      usage: 'delete <id>',
+      description: '删除图形（容器则连同全部子孙）',
+      create: (args, session) => new DeleteCommand(args, session),
     });
 
     // ---- 显示类（不进入 undo 栈）----

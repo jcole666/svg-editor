@@ -37,6 +37,10 @@ export class Circle extends Shape {
     );
   }
 
+  referencePoint(): { x: number; y: number } {
+    return { x: this.cx, y: this.cy };
+  }
+
   moveBy(dx: number, dy: number): void {
     this.cx += dx;
     this.cy += dy;

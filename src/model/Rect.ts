@@ -41,6 +41,10 @@ export class Rect extends Shape {
     );
   }
 
+  referencePoint(): { x: number; y: number } {
+    return { x: this.x, y: this.y };
+  }
+
   moveBy(dx: number, dy: number): void {
     this.x += dx;
     this.y += dy;
