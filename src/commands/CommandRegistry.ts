@@ -7,7 +7,9 @@ import { GroupCommand } from './GroupCommand';
 import { HelpCommand } from './HelpCommand';
 import { InitCommand } from './InitCommand';
 import { MoveCommand } from './MoveCommand';
+import { ReadCommand } from './ReadCommand';
 import { RedoCommand } from './RedoCommand';
+import { SaveCommand } from './SaveCommand';
 import { ScaleCommand } from './ScaleCommand';
 import { SetCommand } from './SetCommand';
 import { ShapeFactory } from './ShapeFactory';
@@ -51,6 +53,18 @@ export class CommandRegistry {
       usage: 'init [w] [h]',
       description: '新建空画布（默认 800x600），作为当前文档',
       create: (args, session) => new InitCommand(args, session),
+    });
+    this.register({
+      name: 'read',
+      usage: 'read <file.svg>',
+      description: '读入 SVG 文件为当前文档；缺 id 时自动补并警告',
+      create: (args, session) => new ReadCommand(args, session),
+    });
+    this.register({
+      name: 'save',
+      usage: 'save [file.svg]',
+      description: '保存当前文档；无参数时保存到读入时的路径',
+      create: (args, session) => new SaveCommand(args, session),
     });
     this.register({
       name: 'canvas',
