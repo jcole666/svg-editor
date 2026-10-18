@@ -1,7 +1,9 @@
+import { AddToCommand } from './AddToCommand';
 import { CanvasCommand } from './CanvasCommand';
 import type { CommandSpec } from './CommandSpec';
 import { CreateCommand } from './CreateCommand';
 import { DeleteCommand } from './DeleteCommand';
+import { GroupCommand } from './GroupCommand';
 import { HelpCommand } from './HelpCommand';
 import { InitCommand } from './InitCommand';
 import { MoveCommand } from './MoveCommand';
@@ -12,6 +14,8 @@ import { ShapeFactory } from './ShapeFactory';
 import { ShowCommand } from './ShowCommand';
 import { TreeCommand } from './TreeCommand';
 import { UndoCommand } from './UndoCommand';
+import { UngroupCommand } from './UngroupCommand';
+import { ZOrderCommand } from './ZOrderCommand';
 
 /**
  * 命令注册表：命令名 → 规格（含工厂）。
@@ -85,6 +89,36 @@ export class CommandRegistry {
       usage: 'delete <id>',
       description: '删除图形（容器则连同全部子孙）',
       create: (args, session) => new DeleteCommand(args, session),
+    });
+    this.register({
+      name: 'group',
+      usage: 'group <newGid> <id1> <id2>...',
+      description: '新建容器并收入若干图形（从各自原父容器摘出，保持相对顺序）',
+      create: (args, session) => new GroupCommand(args, session),
+    });
+    this.register({
+      name: 'ungroup',
+      usage: 'ungroup <gid>',
+      description: '解散容器，子图形提升到原容器的父级并占据其位置',
+      create: (args, session) => new UngroupCommand(args, session),
+    });
+    this.register({
+      name: 'addto',
+      usage: 'addto <gid> <id>',
+      description: '把已有图形移入容器（作为最后一个子节点）',
+      create: (args, session) => new AddToCommand(args, session),
+    });
+    this.register({
+      name: 'front',
+      usage: 'front <id>',
+      description: '调整 z-order：置于同级最前',
+      create: (args, session) => new ZOrderCommand(args, session, 'front'),
+    });
+    this.register({
+      name: 'back',
+      usage: 'back <id>',
+      description: '调整 z-order：置于同级最后',
+      create: (args, session) => new ZOrderCommand(args, session, 'back'),
     });
 
     // ---- 撤销重做（不进入 undo 栈）----

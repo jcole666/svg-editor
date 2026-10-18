@@ -160,6 +160,35 @@ io   →  model
 
 ---
 
+### 阶段 P6：容器命令与"移动"的语义
+
+`group` / `ungroup` / `addto` / `front` / `back` 的功能不难，难的是**三条容易把树改坏的地方**。
+
+- **难点 1：防环。** `group bad c1 markers`（markers 已经包含 c1）如果不拦，会造出"自己包含自己"的树，`tree` 命令会直接无限递归爆栈。校验放在**任何改动之前**，错误文案对齐 §4.2/§6：
+  ```
+  error: cannot group a container into its own descendant: markers
+  ```
+  `addto` 同样要拦"把容器挪进自己的后代"。
+
+- **难点 2（本阶段最大的设计修正）："新建"和"移动"是两件事。**
+  一开始只给 `Document` 提供了 `add` / `insert` / `remove`，它们都会**登记或注销 id 索引**。结果写 `ungroup` 的 undo 时报 `id already exists`：因为被提升到父级的子节点**一直还在索引里**，再 `insert` 一次就重复登记了。
+  修正：把 `Document` 的操作分成两套——
+  - `add` / `insert` / `remove`：改**索引 + 结构**，用于新建 / 删除
+  - `detach` / `reparent`：**只改结构**，用于移动（id 不变）
+  这也顺带解释了为什么"移动一个图形"和"复制一个图形"在实现上是完全不同的两件事。
+
+- **难点 3：undo 必须"原位恢复"。** 容器命令改变的往往是**兄弟顺序**：
+  - `group` 的 undo 要按**原下标升序**放回（降序插会把顺序插反）
+  - `front` / `back` 的 undo 要恢复原下标
+  - `delete` 的 undo 要回到原父容器的原下标（这一步在 P4 就预留了 `{shape, parent, index}`）
+  兄弟顺序不是"无所谓"的细节——它就是 z-order，`front`/`back` 的全部意义所在。
+
+- **规格取舍**：§4.2 规定画布根级容器**不允许** `ungroup`（`cannot ungroup top-level container`）。这意味着 §6.1 那个根级的 `g#flowchart` 实际上解不开。照规格实现，并在这里记一笔。
+
+- 测试 109 → **128 个**。新增覆盖：收入顺序与落位、防环（group 与 addto）、索引语义（移动不重复登记）、四条命令的 undo 原位恢复、z-order 只在同级生效。
+
+---
+
 ## 三、一致性自查
 
 > 实现完成后填写，对照方案如实回答两个问题。

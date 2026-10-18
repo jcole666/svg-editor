@@ -3,11 +3,15 @@ import { Group } from './Group';
 import { NoSuchShapeError } from './NoSuchShapeError';
 import { Shape } from './Shape';
 
-/** remove() 的结果：图形本身 + 它原来的父子位置。 */
-export interface RemovedShape {
-  readonly shape: Shape;
+/** 某个图形在树中的位置。 */
+export interface ShapePosition {
   readonly parent: Group | null;
   readonly index: number;
+}
+
+/** remove() 的结果：图形本身 + 它原来的位置。 */
+export interface RemovedShape extends ShapePosition {
+  readonly shape: Shape;
 }
 
 /**
@@ -15,6 +19,10 @@ export interface RemovedShape {
  *
  * 它知道"怎么改数据"：持有画布尺寸、根级图形列表、以及 id → 图形的索引。
  * 命令对象只负责把请求转发到这里（对应命令模式 p17「命令只做转发」）。
+ *
+ * 两套操作要分清：
+ *   - add / insert / remove：**登记或注销 id 索引**，用于新建、删除
+ *   - detach / reparent    ：**只调整树结构**，用于移动图形（id 不变，不能重复登记）
  */
 export class Document {
   private canvasWidth: number;
@@ -70,46 +78,50 @@ export class Document {
     return shape;
   }
 
+  /** 图形在当前父容器（或画布根）里的下标。 */
+  indexOf(shape: Shape): number {
+    const parent = shape.parent;
+    return parent === null ? this.rootShapes.indexOf(shape) : parent.children().indexOf(shape);
+  }
+
+  /** 给定父容器下的兄弟数量。 */
+  siblingCount(parent: Group | null): number {
+    return parent === null ? this.rootShapes.length : parent.children().length;
+  }
+
   /**
-   * 登记图形（含全部子孙）并挂到父容器；parent 省略时挂到画布根。
+   * 登记图形（含全部子孙）并追加到父容器末尾（parent 省略时挂到画布根）。
    * id 重复时抛 DuplicateIdError，且不改变任何状态（先校验后修改）。
    */
   add(shape: Shape, parent?: Group): void {
     this.registerSubtree(shape);
-    if (parent) {
-      parent.addChild(shape);
-    } else {
-      this.rootShapes.push(shape);
-    }
+    this.attach(shape, parent ?? null, parent === undefined ? this.rootShapes.length : parent.children().length);
   }
 
   /**
-   * 在指定父容器的指定下标处插入图形（undo 原位恢复用）。
+   * 在指定位置插入图形（含子孙），并登记 id。
    * index 越界时退化为追加到末尾。
    */
   insert(shape: Shape, parent: Group | null, index: number): void {
     this.registerSubtree(shape);
-    if (parent === null) {
-      const position = index < 0 || index > this.rootShapes.length ? this.rootShapes.length : index;
-      this.rootShapes.splice(position, 0, shape);
-      shape.attachTo(null);
-    } else {
-      const position = index < 0 || index > parent.children().length ? parent.children().length : index;
-      parent.addChild(shape, position);
-    }
+    this.attach(shape, parent, index);
   }
 
   /**
-   * 摘除图形（含子孙），返回它原来的父子位置。
-   *
-   * 返回 parent / index 是给 P5 的 undo 用的：恢复时必须放回原父容器的原位，
-   * 否则兄弟顺序变了，z-order 就错了。
+   * 只调整结构位置，**不**重新登记 id —— 用于移动一个已经在文档里的图形。
+   * 与 insert 的区别正是 GroupCommand / AddToCommand / ungroup 需要的地方。
    */
-  remove(id: string): RemovedShape {
-    const shape = this.require(id);
+  reparent(shape: Shape, parent: Group | null, index: number): void {
+    this.attach(shape, parent, index);
+  }
+
+  /**
+   * 从父容器（或画布根）摘除，但**保留 id 索引**。
+   * 返回它原来的位置，供 undo 原位恢复。
+   */
+  detach(shape: Shape): ShapePosition {
     const parent = shape.parent;
-    const siblings = parent === null ? this.rootShapes : parent.children();
-    const index = siblings.indexOf(shape);
+    const index = this.indexOf(shape);
 
     if (parent === null) {
       const rootIndex = this.rootShapes.indexOf(shape);
@@ -120,15 +132,22 @@ export class Document {
       parent.removeChild(shape);
     }
 
+    return { parent, index };
+  }
+
+  /** 摘除图形（含子孙）并从索引中注销，返回它原来的位置。 */
+  remove(id: string): RemovedShape {
+    const shape = this.require(id);
+    const position = this.detach(shape);
     this.unregisterSubtree(shape);
-    return { shape, parent, index };
+    return { shape, parent: position.parent, index: position.index };
   }
 
   countShapes(): number {
     return this.shapesById.size;
   }
 
-  /** 深拷贝整份文档（P5 的快照法用它做撤销；Command 模式版本不再依赖它）。 */
+  /** 深拷贝整份文档（测试与工具用；撤销已改为 Command 模式，不再依赖它）。 */
   clone(): Document {
     const copy = new Document(this.canvasWidth, this.canvasHeight);
     copy.sourceFilePath = this.sourceFilePath;
@@ -151,6 +170,24 @@ export class Document {
     }
     const inner = this.rootShapes.map((shape) => shape.toSvg(2)).join('\n');
     return `${open}>\n${inner}\n</svg>`;
+  }
+
+  /** 只挂接结构：设置父子指针并插入到指定下标。 */
+  private attach(shape: Shape, parent: Group | null, index: number): void {
+    if (parent === null) {
+      const position = Document.clamp(index, this.rootShapes.length);
+      this.rootShapes.splice(position, 0, shape);
+      shape.attachTo(null);
+      return;
+    }
+    parent.addChild(shape, Document.clamp(index, parent.children().length));
+  }
+
+  private static clamp(index: number, max: number): number {
+    if (index < 0) {
+      return 0;
+    }
+    return index > max ? max : index;
   }
 
   private registerSubtree(shape: Shape): void {
