@@ -1,5 +1,6 @@
 import { CommandExecutor } from '../src/app/CommandExecutor';
 import { Session } from '../src/app/Session';
+import { ErrorFormatter } from '../src/cli/ErrorFormatter';
 import { Tokenizer } from '../src/cli/Tokenizer';
 import { CommandRegistry } from '../src/commands/CommandRegistry';
 
@@ -24,4 +25,17 @@ export function createRunner(): (line: string) => string[] {
     }
     return executor.execute(spec.create(args, session));
   };
+}
+
+/**
+ * 执行一条应当失败的命令，返回 CLI 上会打印的那一行（含 `error: ` 前缀）。
+ * 如果命令没失败，测试直接报错。
+ */
+export function errorLine(run: (line: string) => string[], line: string): string {
+  try {
+    run(line);
+  } catch (error) {
+    return ErrorFormatter.toLine(error);
+  }
+  throw new Error(`expected command to fail but it succeeded: ${line}`);
 }

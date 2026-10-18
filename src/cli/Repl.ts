@@ -3,6 +3,7 @@ import * as readline from 'node:readline';
 import { CommandExecutor } from '../app/CommandExecutor';
 import { Session } from '../app/Session';
 import { CommandRegistry } from '../commands/CommandRegistry';
+import { ErrorFormatter } from './ErrorFormatter';
 import { Tokenizer } from './Tokenizer';
 
 /**
@@ -74,16 +75,12 @@ export class Repl {
         console.log(outputLine);
       }
     } catch (error) {
-      console.log(`error: ${Repl.messageOf(error)}`);
+      console.log(ErrorFormatter.toLine(error));
     }
   }
 
   private stop(): void {
     this.stopped = true;
     this.rl.close();
-  }
-
-  private static messageOf(error: unknown): string {
-    return error instanceof Error ? error.message : String(error);
   }
 }

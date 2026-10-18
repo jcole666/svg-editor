@@ -215,6 +215,19 @@ io   →  model
 
 ---
 
+### 阶段 P8：错误文案逐条对齐 §4.2
+
+功能已经齐了，这一阶段做的是**验收密度**：把任务书 §4.2 表格里的每一条都变成一条可执行断言。
+
+- 抽出 `ErrorFormatter`：Repl 打印错误和测试断言错误必须走**同一条**格式化路径。否则很容易出现"测试断言 message、线上打印 `error: message`"的错位。
+- `test/commands/error-messages.test.ts` 用一张对照表覆盖 §4.2 全部条目，**期望值带 `error: ` 前缀**（即用户真正看到的那一行）。
+- 除了文案，每条失败命令还额外验证两件事：
+  1. **失败不改变任何状态**——执行前后 `tree` 必须完全一致；
+  2. **失败不污染撤销栈**——连续制造 4 条失败命令后，`undo` 只撤销那一条真正成功的 `create`。
+- **一处诚实的空缺**：§4.2 的 `cannot ungroup composite shape: n1` 在本阶段**不可达**。因为 §4.4 明确 `box` 属于后续插件化阶段，本阶段 `create box` 会先报 `unknown shape type`。测试里专门写了一条用例把这个事实固定下来，等插件化阶段再启用该分支。
+
+---
+
 ## 三、一致性自查
 
 > 实现完成后填写，对照方案如实回答两个问题。
@@ -224,6 +237,25 @@ io   →  model
 
 ---
 
-## 四、质量保证手段
+## 四、质量保证手段（部分，P9 补充）
 
-> 待 P9/P10 补全：如何确认功能完整、对代码质量有信心的依据（测试分层、覆盖的命令清单）。
+### 1. §4.2 错误文案对照（由测试逐条锁定）
+
+| # | 场景 | CLI 输出 | 测试 |
+|:-:|---|---|:-:|
+| 1 | id 已存在 | `error: id already exists: r1` | ✅ |
+| 2 | id 不存在 | `error: no such shape: r9` | ✅ |
+| 3 | `in` 目标不存在 | `error: no such container: node9` | ✅ |
+| 4 | `in` 目标不是容器 | `error: not a container: start` | ✅ |
+| 5 | 未注册的图形类型 | `error: unknown shape type: hexagon (is the plugin loaded?)` | ✅ |
+| 6 | ungroup 复合图形 | `error: cannot ungroup composite shape: n1` | ⚠️ 本阶段不可达（`box` 属插件化阶段，见 §4.4） |
+| 7 | group 含容器与其子孙 | `error: cannot group a container into its own descendant: markers` | ✅ |
+| 8 | ungroup 根级容器 | `error: cannot ungroup top-level container: scene` | ✅ |
+| 9 | scale 非正数 | `error: scale factor must be positive` | ✅ |
+| 10 | 文件不存在 | `error: cannot read file: no-such-file.svg` | ✅ |
+| 11 | 文件不可写 | `error: cannot write file: <path>` | ✅ |
+| 12 | 未 read/init 就执行 | `error: no document. use 'init' or 'read' first` | ✅ |
+
+覆盖率：**12 条中 11 条已覆盖，第 6 条按规格属于后续阶段**。
+
+> 待 P9 补充：测试分层（接收者层 / 命令层 / REPL 层）与命令清单覆盖率。
