@@ -1,5 +1,5 @@
-import type { Session } from '../app/Session';
-import type { Command } from './Command';
+﻿import type { Session } from '../app/Session';
+import type { Command } from '../app/Command';
 
 /**
  * undo —— 撤销上一次编辑命令（§3）。

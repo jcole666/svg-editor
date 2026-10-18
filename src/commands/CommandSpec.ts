@@ -1,5 +1,5 @@
-import type { Session } from '../app/Session';
-import type { Command } from './Command';
+﻿import type { Session } from '../app/Session';
+import type { Command } from '../app/Command';
 
 /**
  * 一条命令的"规格"：名字、语法、说明、以及怎么造出它。

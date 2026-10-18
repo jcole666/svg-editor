@@ -9,44 +9,203 @@
 
 ### 1. 模块划分
 
-> 待 P10 补全：每个模块（目录）的职责表 + PlantUML 组件图/包图。
+六个模块 + 一个组合根，按"依赖只向稳定方向流动"排列：
 
-| 模块 | 职责 | 不允许做的事 |
-|---|---|---|
-| `src/cli/` | REPL 循环、分词、控制台输入输出 | 直接修改图形数据 |
-| `src/commands/` | Command 接口、各具体命令、命令注册表 | 包含业务逻辑（只转发） |
-| `src/app/` | 会话状态：当前文档、命令栈 | 做文本渲染、读写文件 |
-| `src/view/` | 把文档/图形渲染成给人看的文本（tree / show） | 修改图形数据 |
-| `src/model/` | 图形类层次、文档模型（Receiver）、领域错误 | 打印、读文件、认识 CLI |
-| `src/io/` | SVG 读写（序列化/反序列化） | 修改内存中的文档结构 |
+| 模块 | 文件 | 行数 | 职责 | 不允许做的事 |
+|---|:-:|:-:|---|---|
+| `src/cli/` | 3 | 185 | REPL 循环、分词、错误格式化、控制台输入输出 | 直接修改图形数据 |
+| `src/app/` | 9 | 244 | 应用层：`Command` / `UndoableCommand` 契约、命令栈、执行器、会话状态 | 依赖具体命令实现、做文本渲染 |
+| `src/commands/` | 22 | 1264 | 19 条命令的具体实现、命令注册表、图形工厂 | 包含业务逻辑（应只做校验与转发） |
+| `src/view/` | 2 | 76 | 把文档/图形渲染成给人看的文本（`tree` / `show`） | 修改图形数据 |
+| `src/model/` | 19 | 1150 | 图形类层次（Composite）、文档模型（Receiver）、领域错误 | 打印、读写文件、认识上层 |
+| `src/io/` | 6 | 541 | SVG 读写、XML 解析 | 修改内存中的文档结构 |
+| `src/main.ts` | 1 | 9 | 组合根：装配 `Repl` 并启动 | 承载业务逻辑 |
+
+> 文件数/行数由 `npm run check:arch` 自动统计：共 62 个 TS 文件、3469 行。
+
+**组件图（PlantUML）**：
+
+```plantuml
+@startuml
+skinparam componentStyle rectangle
+skinparam arrowColor #555
+
+package "cli（Invoker）" {
+  [Repl] as Repl
+  [Tokenizer] as Tokenizer
+  [ErrorFormatter] as ErrorFormatter
+}
+
+package "app（应用层）" {
+  [Command / UndoableCommand\n<<contract>>] as Contract
+  [CommandStack\nundo栈 + redo栈] as Stack
+  [CommandExecutor] as Executor
+  [Session] as Session
+}
+
+package "commands" {
+  [CommandRegistry\n命令名 → 实现] as Registry
+  [ShapeFactory\n类型名 → 类] as Factory
+  [19 条命令] as Cmds
+}
+
+package "view" {
+  [TreeRenderer] as Tree
+  [ShapeDetailRenderer] as Detail
+}
+
+package "model（领域层）" {
+  [Shape 类层次\nComposite] as Shape
+  [Document\nReceiver] as Doc
+}
+
+package "io" {
+  [SvgReader] as Reader
+  [SvgWriter] as Writer
+  [XmlParser] as Parser
+}
+
+Repl --> Tokenizer
+Repl --> ErrorFormatter
+Repl --> Registry
+Repl --> Executor
+ErrorFormatter ..> Contract : 格式化错误
+
+Executor --> Stack
+Executor --> Session
+Stack --> Contract
+Cmds ..|> Contract : implements
+Registry --> Cmds : 构造
+Registry --> Factory
+Cmds --> Session
+Cmds --> Doc
+Cmds --> Shape
+Cmds --> Tree
+Cmds --> Detail
+Cmds --> Reader
+Cmds --> Writer
+
+Tree --> Doc
+Detail --> Shape
+Doc --> Shape
+Reader --> Parser
+Reader --> Doc
+Writer --> Doc
+Session --> Doc
+Session --> Stack
+
+note right of Registry
+  任务书 §2.1 允许的两处
+  "按名字分派"之一
+  （标注为待重构：插件化后改注册式插槽）
+end note
+note right of Factory
+  同上，第二处
+end note
+@enduml
+```
+
+（该图是 PlantUML 源码，可直接粘贴到 plantuml.com 或 IDE 插件渲染。）
+
+**同一套结构的 Mermaid 版本**（GitHub / VS Code 可直接渲染，方便快速查看）：
+
+```mermaid
+flowchart TD
+    main["main.ts（组合根）"] --> cli
+    cli["cli — Repl · Tokenizer · ErrorFormatter"] --> commands
+    cli --> app
+    commands["commands — 19 条命令 · CommandRegistry · ShapeFactory"] --> app
+    commands --> view
+    commands --> io
+    commands --> model
+    app["app — Command 契约 · CommandStack · CommandExecutor · Session"] --> model
+    view["view — TreeRenderer · ShapeDetailRenderer"] --> model
+    io["io — SvgReader · SvgWriter · XmlParser"] --> model
+    model["model — Shape 类层次（Composite）· Document（Receiver）"]
+```
 
 ### 2. 设计模式的选择
 
-> 待 P10 补全：问题 → 方案 → 模式名称，以及 Command 在代码中的落地位置。
+#### Command（行为型）—— 满足任务书 §1.2 的强制要求
 
-- **Command（行为型）**：解决的问题是"请求要能被保存并重放"（undo/redo）。落地位置：`src/commands/`。
-- **Composite（结构型）**：解决的问题是"容器与叶子统一操作"（`<g>` 与 `<rect>` 一视同仁）。落地位置：`src/model/`。
+- **问题**：编辑器需要 undo/redo。撤销意味着"动作"必须能被**保存下来并重新调用**，而一行 `shape.x += dx` 存不下来。
+- **方案**：把请求封装成对象。`UndoableCommand` 声明 `execute()` 与 `undo()`，`CommandStack` 用两个栈管理它们。
+- **落地点**：`src/app/Command.ts`、`UndoableCommand.ts`、`CommandStack.ts`、`CommandExecutor.ts`；每条命令一个类（`src/commands/*Command.ts`）。
+- **角色对应**（对应课件命令模式 p16-17）：
+
+  | GoF 角色 | 本项目 |
+  |---|---|
+  | `Command` | `src/app/Command.ts`（`execute(): string[]`） |
+  | `ConcreteCommand` | `CreateCommand` / `MoveCommand` / … 共 10 个可撤销命令 |
+  | `Invoker` | `Repl` + `CommandExecutor`（持有并触发） |
+  | `Client` | `CommandRegistry`（造出命令并设置接收者） |
+  | `Receiver` | `Document` / `Shape`（真正改数据的地方） |
+
+- **为什么它能解决问题**：命令出栈之后**仍然可以被调用**——这是"请求成为对象"才有的能力（课件 p14）。
+
+#### Composite（结构型）—— 满足 §2.1「容器与叶子统一操作」
+
+- **问题**：`<g>` 是容器，`<rect>` 是叶子。如果每条命令都区分两者，就会出现 `switch(tag)` 或 `instanceof` 分支，且新增图形类型要改所有命令。
+- **方案**：`Group` 也继承 `Shape`。`moveBy` / `scaleBy` 在叶子上改自身坐标，在容器上**递归转发**给子节点。调用方只写 `shape.moveBy(dx, dy)`，不知道拿到的是哪一种。
+- **落地点**：`src/model/Shape.ts` 的抽象方法 + `src/model/Group.ts`。
+- **实证**：`move node2 0 100` 一条命令让整个节点（矩形 + 文字）一起动（见过程记录 P4）。
+
+#### 明确**不用**的模式（以及理由）
+
+| 模式 | 为什么不用 |
+|---|---|
+| Iterator | `tree` 递归遍历已经够；课件迭代器 p18 明确"简单稳定的结构没必要模式化，避免过度设计" |
+| Memento | Command 模式已经解决了 undo；再叠一层备忘录会让"每条命令记什么"变模糊 |
+| Visitor | 本项目的"操作增加"不频繁（只有 tree/show/save 三处），用 `Shape` 的多态方法即可；Visitor 适合"元素稳定、操作多变" |
+
+这两处"不用"同样是设计判断，写在这里是为了说明：**模式不是越多越好**。
 
 ### 3. 依赖方向规则
 
-> 待 P10 补全：明确写出"哪些模块可以依赖哪些模块"，并说明理由。
-
-约定（P2 已按实际代码更新，P10 定稿）：
+**规则**（`npm run check:arch` 会逐条校验）：
 
 ```text
-cli  →  commands  →  { view, app, model }
-view →  model
-app  →  model
-io   →  model
+cli      →  app, commands
+commands →  app, model, view, io
+app      →  model
+view     →  model
+io       →  model
+model    →  （不依赖任何模块）
+src/main.ts 是组合根，允许依赖任意模块
 ```
 
-反向依赖视为待处理项：`model` 不得 import `cli` / `commands` / `view` / `io`；
-`commands` 不得 import `cli`。渲染器因此放在 `view/` 而不是 `cli/`——
-否则 `TreeCommand` 会反向依赖 `cli`，违反第二条。
+**为什么这样定**：
+
+- `model` 是领域核心，必须**零依赖**——它不知道 CLI、文件、渲染的存在。因此它最稳定、最容易测（接收者层的 30 个测试完全不碰上层）。
+- `app` 只依赖 `model`：命令契约与命令栈属于应用层，不该认识具体命令实现。这样**新增命令不需要改命令栈**。
+- `commands` 依赖 `app`（契约、Session）、`model`（Receiver）、`view`（tree/show 渲染）、`io`（read/save）。它是协作最密集的一层。
+- `cli` 只依赖 `app` 与 `commands`：它负责输入输出，不该认识图形。
+- 渲染器放 `view/` 而不是 `cli/`，正是为了让 `commands` 不必反向依赖 `cli`。
+
+**检查方式不是靠自觉，而是实证**：
+
+```powershell
+npm run check:arch
+```
+
+脚本扫描 `src/` 下真实 import、按模块聚合，输出边表并对照白名单；出现表外依赖以退出码 1 结束，可挂进提交流程。
 
 ### 4. 变化点假设
 
-> 待 P10 补全：逐条列出"未来最可能变化的地方"，以及为它留了什么（或为什么决定不留）。
+逐条列出"我认为未来最可能变化的地方"，以及为它留了什么——**或者为什么决定不留**。
+
+| # | 变化点 | 为它留了什么 | 或者为什么决定不留 |
+|:-:|---|---|---|
+| 1 | **新增命令**（如 copy / paste / align） | `UndoableCommand` 插槽：新增一个类 + 注册表一行；命令栈零改动 | — |
+| 2 | **新增图形类型**（如 box / path） | `ShapeFactory` 插槽：一个 `Shape` 子类 + 工厂注册 | 不做插件化：§2.1 允许本阶段架构层"无插槽"，`box` 按 §4.4 属下一阶段，提前抽象反而猜错方向 |
+| 3 | **图形渲染格式变化**（样式、transform） | `Shape.toSvg()` 是唯一出口，改动收敛在各子类内部 | `transform` 目前只保留、不应用；这是**已知限制**，不是预留 |
+| 4 | **tree / show 的显示格式** | 集中在 `view/` 两个渲染器，命令层完全不感知 | — |
+| 5 | **撤销粒度改为事务 / 宏** | `CommandStack` 是唯一入口；宏命令只需实现 `UndoableCommand` 并组合子命令 | — |
+| 6 | **持久化格式扩展**（defs、CSS、多文件） | `io/` 完全隔离，扩展读写不影响内核 | 未支持 `defs` / CDATA / DTD，边界已在 `XmlParser` 注释中写明 |
+| 7 | **命令分发改为插件注册** | `CommandRegistry` 已是唯一集中处，并标注为"待重构项" | 本阶段只允许两处按名字分派（§2.1），不额外抽象 |
+| 8 | **多文档 / 多视图** | `Session` 是唯一持有"当前文档"的地方 | 单文档已满足 §3 全部命令，提前引入只会增加状态管理复杂度 |
+
+**结论**：变化点 1、5、7 是零成本扩展（加类 + 注册）；2、4、6 是低成本（改动被模块边界关住）；3 是已知缺口，如实记录。
 
 ---
 
@@ -249,12 +408,61 @@ io   →  model
 
 ---
 
+### 阶段 P10：文档定稿与"可复验的架构"
+
+这一阶段做的不只是把文档写满，还真的**验了一遍架构**。
+
+- **用脚本做依赖审计，抓到一处真违规。** 扫描 `src/` 下真实 import 后，第一次的结果是：
+  ```
+  app -> commands     2 处   ← 与下面的边构成循环
+  commands -> app    29 处
+  ```
+  `app/CommandExecutor.ts` 与 `app/UndoableCommand.ts` 引用了 `commands/Command.ts` 里的命令契约。虽然都是 `import type`（编译后擦除，运行时没出过 bug），但它意味着"改 `commands` 会牵动 `app`"，与方案里写的单向依赖不符。
+  **修复**：把 `Command` / `CommandKind` 连同 `UndoableCommand` 归到应用层 `src/app/`，`commands` 改为从 `app` 取契约。命令契约本来就属于"应用层定义、命令层实现"，这个移动也让分层更顺。
+
+- **把检查固化成工具**：`scripts/check-architecture.mjs` + `npm run check:arch`。它输出模块规模与依赖边表、对照白名单、违规即退出码 1。
+  **为什么要固化成脚本**：架构规则写在文档里只是承诺，写成可执行检查才是约束。以后任何人（包括我自己）加了一条约外的 import，跑一次就知道。
+
+- **文档定稿的四节**：模块划分（含文件数/行数与两张图）、设计模式的选择（含**明确不用的模式**及理由）、依赖方向规则、变化点假设（8 条，逐条写清"留了什么"或"为什么不留"）。
+
+- **`一致性自查` 如实写"曾经违反过"**，而不是粉饰成"完全一致"。理由很直接：自查的价值在于发现偏差，不是证明没偏差。
+
+---
+
 ## 三、一致性自查
 
-> 实现完成后填写，对照方案如实回答两个问题。
+实现完成后，对照上面的方案如实回答两个问题。
 
-1. **模块划分**：实际目录与方案是否一致？不一致之处是否已记入修订记录？
-2. **依赖方向**：方案里的规则有没有被违反？抽样检查代码中的依赖关系。
+### 1. 模块划分：实际目录与方案是否一致？
+
+**一致。** 六个模块目录（`cli` / `app` / `commands` / `view` / `model` / `io`）及组合根 `main.ts` 都在，职责与表中描述吻合，没有遗留的临时目录或散落文件。
+
+**有一处修订**：`Command.ts` 原本放在 `src/commands/`，P10 自查时上移到 `src/app/`。原因见下一条。该修订已写入本文档「过程记录 · 阶段 P10」。
+
+### 2. 依赖方向：方案里的规则有没有被违反？
+
+**曾经违反过，已修复。**
+
+P10 用脚本扫描 `src/` 下真实 import，第一次运行的结果是：
+
+```
+app -> commands   2 处      ← 违规
+commands -> app  29 处
+```
+
+`app` 里的 `CommandExecutor` 与 `UndoableCommand` 引用了 `commands/Command.ts` 里的命令契约，与 `commands → app` 构成**模块级循环依赖**，与"单向依赖"的方案不符。
+
+**处理**：把命令契约（`Command` / `CommandKind`）与 `UndoableCommand` 一并归到应用层 `src/app/`，`commands` 改为从 `app` 取契约。修复后：
+
+```text
+$ npm run check:arch
+...
+依赖方向检查通过：无表外依赖。
+```
+
+**补充说明**：这 2 处 import 都是 `import type`，编译后会被擦除，**运行时并没有出过 bug**。但类型层面的循环会掩盖真实耦合——它让人以为模块是单向的，实际上改 `commands/Command.ts` 会牵动 `app`。这类问题正是"一致性自查"该抓的。
+
+**现在这条规则是可复验的**，不是口号：`npm run check:arch` 已进入提交前检查清单（typecheck → test → check:arch → build）。
 
 ---
 

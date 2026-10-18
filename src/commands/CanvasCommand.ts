@@ -1,6 +1,6 @@
-import type { Session } from '../app/Session';
+﻿import type { Session } from '../app/Session';
 import { Shape } from '../model/Shape';
-import type { Command, CommandKind } from './Command';
+import type { Command, CommandKind } from '../app/Command';
 import { UsageError } from './UsageError';
 
 /**

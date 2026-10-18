@@ -1,4 +1,4 @@
-import type { Command } from '../commands/Command';
+﻿import type { Command } from './Command';
 
 /**
  * 可撤销命令：在 Command 之上增加"反向执行"。

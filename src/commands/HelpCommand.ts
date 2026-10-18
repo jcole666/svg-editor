@@ -1,4 +1,4 @@
-import type { Command } from './Command';
+﻿import type { Command } from '../app/Command';
 import type { CommandSpec } from './CommandSpec';
 
 /**

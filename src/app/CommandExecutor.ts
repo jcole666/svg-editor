@@ -1,4 +1,4 @@
-import type { Command } from '../commands/Command';
+﻿import type { Command } from './Command';
 import type { Session } from './Session';
 import type { UndoableCommand } from './UndoableCommand';
 

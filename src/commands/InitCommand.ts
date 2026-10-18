@@ -1,7 +1,7 @@
-import type { Session } from '../app/Session';
+﻿import type { Session } from '../app/Session';
 import { Document } from '../model/Document';
 import { Shape } from '../model/Shape';
-import type { Command } from './Command';
+import type { Command } from '../app/Command';
 import { UsageError } from './UsageError';
 
 /**
