@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="768" viewBox="0 0 1024 768">
+  <g id="flowchart">
+    <g id="node1">
+      <rect id="start" x="180" y="150" width="240" height="90" fill="#4a90d9"/>
+      <text id="start-label" x="232.5" y="202.5">开始</text>
+    </g>
+    <line id="arrow1" x1="280" y1="130" x2="520" y2="130" stroke="black"/>
+  </g>
+</svg>
