@@ -2,7 +2,6 @@ import type { Session } from '../app/Session';
 import type { UndoableCommand } from '../app/UndoableCommand';
 import { CannotGroupDescendantError } from '../model/CannotGroupDescendantError';
 import type { ShapePosition } from '../model/Document';
-import { Group } from '../model/Group';
 import { NotAContainerError } from '../model/NotAContainerError';
 import { UsageError } from './UsageError';
 
@@ -32,14 +31,14 @@ export class AddToCommand implements UndoableCommand {
     }
 
     const target = document.require(this.args[0]);
-    if (!(target instanceof Group)) {
+    if (!target.isContainer()) {
       throw new NotAContainerError(this.args[0]);
     }
 
     const shape = document.require(this.args[1]);
 
     // 防环：不能把容器挪进它自己的后代的内部
-    if (shape === target || (shape instanceof Group && shape.contains(target))) {
+    if (shape === target || shape.contains(target)) {
       throw new CannotGroupDescendantError(shape.id);
     }
 

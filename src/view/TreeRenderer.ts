@@ -1,5 +1,4 @@
 import type { Document } from '../model/Document';
-import { Group } from '../model/Group';
 import { Shape } from '../model/Shape';
 
 /**
@@ -23,9 +22,7 @@ export class TreeRenderer {
     const lines: string[] = [
       attributes.length > 0 ? `${shape.label()}  ${attributes}` : shape.label(),
     ];
-    if (shape instanceof Group) {
-      this.renderChildren(shape.children(), '', lines);
-    }
+    this.renderChildren(shape.childShapes(), '', lines);
     return lines;
   }
 
@@ -48,9 +45,7 @@ export class TreeRenderer {
         lines.push(`${prefix}${branch}${child.label()}`);
       }
 
-      if (child instanceof Group) {
-        this.renderChildren(child.children(), `${prefix}${isLast ? '    ' : '│   '}`, lines);
-      }
+      this.renderChildren(child.childShapes(), `${prefix}${isLast ? '    ' : '│   '}`, lines);
     });
   }
 }

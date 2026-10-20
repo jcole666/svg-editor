@@ -73,7 +73,7 @@ export class CreateCommand implements UndoableCommand {
     if (target === undefined) {
       throw new NoSuchContainerError(containerId);
     }
-    if (!(target instanceof Group)) {
+    if (!target.isContainer()) {
       throw new NotAContainerError(containerId);
     }
     return target;

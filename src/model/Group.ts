@@ -20,6 +20,14 @@ export class Group extends Shape {
     return this.childNodes;
   }
 
+  isContainer(): this is Group {
+    return true;
+  }
+
+  childShapes(): readonly Shape[] {
+    return this.childNodes;
+  }
+
   /** 插入子节点；index 省略时追加到末尾（addto 的语义）。 */
   addChild(child: Shape, index?: number): void {
     const position = index ?? this.childNodes.length;
@@ -43,7 +51,7 @@ export class Group extends Shape {
       if (child === node) {
         return true;
       }
-      if (child instanceof Group && child.contains(node)) {
+      if (child.contains(node)) {
         return true;
       }
     }

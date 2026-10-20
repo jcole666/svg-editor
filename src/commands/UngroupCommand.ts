@@ -15,7 +15,7 @@ import { UsageError } from './UsageError';
  */
 export class UngroupCommand implements UndoableCommand {
   readonly kind = 'edit' as const;
-  private containerId = '';
+  private container: Group | null = null;
   private parent: Group | null = null;
   private index = 0;
   private childOrder: Shape[] = [];
@@ -33,7 +33,7 @@ export class UngroupCommand implements UndoableCommand {
     }
 
     const container = document.require(this.args[0]);
-    if (!(container instanceof Group)) {
+    if (!container.isContainer()) {
       throw new NotAContainerError(this.args[0]);
     }
 
@@ -56,7 +56,7 @@ export class UngroupCommand implements UndoableCommand {
       position += 1;
     }
 
-    this.containerId = container.id;
+    this.container = container;
     this.parent = parent;
     this.index = index;
     this.childOrder = children;
@@ -70,21 +70,28 @@ export class UngroupCommand implements UndoableCommand {
   }
 
   undo(): string[] {
+    const container = this.container;
+    if (container === null) {
+      throw new Error('ungroup command has nothing to undo');
+    }
+
     const document = this.session.requireDocument();
 
-    const group = new Group(this.containerId);
-    document.insert(group, this.parent, this.index);
+    // 必须放回**原来那个对象**，不能 new 一个新的：
+    // 先前命令（delete / front / back / addto / group）的 undo 里存着
+    // 指向这个容器的引用，换成新对象会让那些引用指向脱离文档树的孤儿节点。
+    document.insert(container, this.parent, this.index);
 
     for (const child of this.childOrder) {
       document.detach(child);
     }
     for (const child of this.childOrder) {
-      group.addChild(child);
+      container.addChild(child);
     }
 
     const count = this.childOrder.length;
     return [
-      `${group.label()} regrouped with ${count} ${count === 1 ? 'child' : 'children'}`,
+      `${container.label()} regrouped with ${count} ${count === 1 ? 'child' : 'children'}`,
     ];
   }
 }

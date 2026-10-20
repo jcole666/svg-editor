@@ -45,6 +45,7 @@ export class GroupCommand implements UndoableCommand {
       throw new DuplicateIdError(groupId);
     }
 
+    GroupCommand.assertUniqueMembers(ids);
     const shapes = ids.map((id) => document.require(id));
     GroupCommand.assertNoCycle(shapes);
 
@@ -94,9 +95,23 @@ export class GroupCommand implements UndoableCommand {
     return [`${group.label()} creation undone`];
   }
 
+  /**
+   * 同一个 id 不能出现两次：否则同一个对象会被加进容器两次，
+   * tree 打印两行、save 写出重复 id 的非法 SVG。
+   */
+  private static assertUniqueMembers(ids: string[]): void {
+    const seen = new Set<string>();
+    for (const id of ids) {
+      if (seen.has(id)) {
+        throw new DuplicateIdError(id);
+      }
+      seen.add(id);
+    }
+  }
+
   private static assertNoCycle(shapes: Shape[]): void {
     for (const candidate of shapes) {
-      if (!(candidate instanceof Group)) {
+      if (!candidate.isContainer()) {
         continue;
       }
       for (const other of shapes) {

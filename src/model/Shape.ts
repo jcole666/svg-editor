@@ -41,6 +41,26 @@ export abstract class Shape {
     this.parentGroup = parent;
   }
 
+  // ---- 容器相关的多态查询（用多态方法替代散落的 instanceof）----
+
+  /**
+   * 是否是容器。叶子用默认实现返回 false，Group 覆写为 true。
+   * 写成类型谓词之后，调用方判断完就能直接当 Group 用，不必再强制转换。
+   */
+  isContainer(): this is Group {
+    return false;
+  }
+
+  /** 容器的子节点；叶子返回空数组。遍历、注册、渲染都走这里。 */
+  childShapes(): readonly Shape[] {
+    return [];
+  }
+
+  /** node 是否为本对象的子孙；叶子永远 false。 */
+  contains(_node: Shape): boolean {
+    return false;
+  }
+
   // ---- 子类必须实现的多态行为 ----
 
   /** SVG 标签名，也是 create 的类型名：rect / circle / ellipse / line / text / g */

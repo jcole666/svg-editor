@@ -195,19 +195,15 @@ export class Document {
       throw new DuplicateIdError(shape.id);
     }
     this.shapesById.set(shape.id, shape);
-    if (shape instanceof Group) {
-      for (const child of shape.children()) {
-        this.registerSubtree(child);
-      }
+    for (const child of shape.childShapes()) {
+      this.registerSubtree(child);
     }
   }
 
   private unregisterSubtree(shape: Shape): void {
     this.shapesById.delete(shape.id);
-    if (shape instanceof Group) {
-      for (const child of shape.children()) {
-        this.unregisterSubtree(child);
-      }
+    for (const child of shape.childShapes()) {
+      this.unregisterSubtree(child);
     }
   }
 }

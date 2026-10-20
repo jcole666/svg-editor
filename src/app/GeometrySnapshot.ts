@@ -1,4 +1,3 @@
-import { Group } from '../model/Group';
 import type { Shape } from '../model/Shape';
 
 interface Entry {
@@ -41,10 +40,8 @@ export class GeometrySnapshot {
       values: shape.geometryAttributes().map((name) => [name, shape.getAttr(name) ?? ''] as const),
     });
 
-    if (shape instanceof Group) {
-      for (const child of shape.children()) {
-        this.collect(child);
-      }
+    for (const child of shape.childShapes()) {
+      this.collect(child);
     }
   }
 }
