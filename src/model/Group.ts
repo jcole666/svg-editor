@@ -24,6 +24,10 @@ export class Group extends Shape {
     return true;
   }
 
+  canUngroup(): boolean {
+    return true;
+  }
+
   childShapes(): readonly Shape[] {
     return this.childNodes;
   }

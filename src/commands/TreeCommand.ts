@@ -1,6 +1,7 @@
 ﻿import type { Session } from '../app/Session';
-import { TreeRenderer } from '../view/TreeRenderer';
 import type { Command } from '../app/Command';
+import type { TreeDecorator } from '../extension/TreeDecorator';
+import { TreeRenderer } from '../view/TreeRenderer';
 import { UsageError } from './UsageError';
 
 /**
@@ -14,19 +15,21 @@ export class TreeCommand implements Command {
   constructor(
     private readonly args: string[],
     private readonly session: Session,
+    private readonly decorators: () => readonly TreeDecorator[] = () => [],
   ) {}
 
   execute(): string[] {
     const document = this.session.requireDocument();
+    const decorators = this.decorators();
 
     if (this.args.length === 0) {
-      return this.renderer.renderDocument(document);
+      return this.renderer.renderDocument(document, decorators);
     }
 
     if (this.args.length !== 1) {
       throw new UsageError('tree [id]');
     }
 
-    return this.renderer.renderSubtree(document.require(this.args[0]));
+    return this.renderer.renderSubtree(document.require(this.args[0]), document, decorators);
   }
 }

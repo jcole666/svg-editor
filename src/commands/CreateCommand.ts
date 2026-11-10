@@ -4,7 +4,7 @@ import { Group } from '../model/Group';
 import { NoSuchContainerError } from '../model/NoSuchContainerError';
 import { NotAContainerError } from '../model/NotAContainerError';
 import type { Shape } from '../model/Shape';
-import type { ShapeFactory } from './ShapeFactory';
+import type { ShapeCatalog } from '../extension/ShapeCatalog';
 import { UsageError } from './UsageError';
 
 /**
@@ -22,7 +22,7 @@ export class CreateCommand implements UndoableCommand {
   constructor(
     private readonly args: string[],
     private readonly session: Session,
-    private readonly factory: ShapeFactory,
+    private readonly factory: ShapeCatalog,
   ) {}
 
   execute(): string[] {
@@ -48,11 +48,8 @@ export class CreateCommand implements UndoableCommand {
     document.add(shape, container ?? undefined);
     this.createdShape = shape;
 
-    return [
-      container === undefined
-        ? `${shape.label()} created`
-        : `${shape.label()} created in ${container.label()}`,
-    ];
+    const head = shape.creationSummary() ?? `${shape.label()} created`;
+    return [container === undefined ? head : `${head} in ${container.label()}`];
   }
 
   undo(): string[] {

@@ -1,5 +1,6 @@
 import type { Session } from '../app/Session';
 import type { UndoableCommand } from '../app/UndoableCommand';
+import { CannotUngroupCompositeError } from '../model/CannotUngroupCompositeError';
 import { CannotUngroupTopLevelError } from '../model/CannotUngroupTopLevelError';
 import { Group } from '../model/Group';
 import { NotAContainerError } from '../model/NotAContainerError';
@@ -35,6 +36,9 @@ export class UngroupCommand implements UndoableCommand {
     const container = document.require(this.args[0]);
     if (!container.isContainer()) {
       throw new NotAContainerError(this.args[0]);
+    }
+    if (!container.canUngroup()) {
+      throw new CannotUngroupCompositeError(container.id);
     }
 
     const parent = container.parent;

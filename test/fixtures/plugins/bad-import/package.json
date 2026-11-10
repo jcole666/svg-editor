@@ -1,0 +1,4 @@
+{
+  "name": "@svgframe/plugin-bad-import",
+  "main": "./index.mjs"
+}

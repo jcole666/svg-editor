@@ -4,7 +4,7 @@ import * as path from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
-import { SvgReader } from '../../src/io/SvgReader';
+import { createReader } from '../helpers';
 import { SvgWriter } from '../../src/io/SvgWriter';
 import { XmlParser } from '../../src/io/XmlParser';
 import { TreeRenderer } from '../../src/view/TreeRenderer';
@@ -48,7 +48,7 @@ describe('P7 XML 解析', () => {
 
 describe('P7 SVG 读取', () => {
   it('读 other.svg：补 id 并给出警告（对齐 §6）', () => {
-    const result = new SvgReader().readFile(OTHER_SVG);
+    const result = createReader().readFile(OTHER_SVG);
 
     expect(result.warnings).toEqual(['warning: assigned id rect1 to unnamed <rect>']);
     expect(result.document.countShapes()).toBe(7);
@@ -57,7 +57,7 @@ describe('P7 SVG 读取', () => {
   });
 
   it('读 other.svg：结构树与 §6 一致', () => {
-    const result = new SvgReader().readFile(OTHER_SVG);
+    const result = createReader().readFile(OTHER_SVG);
     expect(new TreeRenderer().renderDocument(result.document)).toEqual([
       'svg (400x300)',
       '├── rect#rect1  x=0 y=0 w=400 h=300 fill=#ffffff',
@@ -74,23 +74,23 @@ describe('P7 SVG 读取', () => {
     const source =
       '<svg width="10" height="10"><rect id="rect1" x="0" y="0" width="1" height="1"/>' +
       '<rect x="1" y="1" width="1" height="1"/></svg>';
-    const result = new SvgReader().readSource(source);
+    const result = createReader().readSource(source);
     expect(result.warnings).toEqual(['warning: assigned id rect2 to unnamed <rect>']);
   });
 
   it('没有 width/height 时回退到 viewBox', () => {
-    const result = new SvgReader().readSource('<svg viewBox="0 0 320 240"/>');
+    const result = createReader().readSource('<svg viewBox="0 0 320 240"/>');
     expect(result.document.width).toBe(320);
     expect(result.document.height).toBe(240);
   });
 
   it('text 内容去掉首尾空白并保留中间空格', () => {
-    const result = new SvgReader().readSource('<svg><text id="t" x="0" y="0">  hello  world  </text></svg>');
+    const result = createReader().readSource('<svg><text id="t" x="0" y="0">  hello  world  </text></svg>');
     expect(result.document.require('t').attributeSummary()).toBe('(0,0) "hello  world"');
   });
 
   it('未知标签被忽略但不会导致失败', () => {
-    const result = new SvgReader().readSource(
+    const result = createReader().readSource(
       '<svg width="10" height="10"><defs><rect id="x" width="1" height="1"/></defs><circle id="c" cx="1" cy="1" r="1"/></svg>',
     );
     expect(result.document.countShapes()).toBe(1);
@@ -98,13 +98,13 @@ describe('P7 SVG 读取', () => {
   });
 
   it('根元素不是 svg 时报错', () => {
-    expect(() => new SvgReader().readSource('<html/>')).toThrow();
+    expect(() => createReader().readSource('<html/>')).toThrow();
   });
 });
 
 describe('P7 SVG 写出与 round-trip', () => {
   it('输出以 XML 声明开头并包含 svg 元素', () => {
-    const result = new SvgReader().readFile(OTHER_SVG);
+    const result = createReader().readFile(OTHER_SVG);
     const text = new SvgWriter().toText(result.document);
     expect(text.startsWith('<?xml version="1.0" encoding="UTF-8"?>')).toBe(true);
     expect(text).toContain('<svg xmlns="http://www.w3.org/2000/svg" width="400" height="300"');
@@ -112,7 +112,7 @@ describe('P7 SVG 写出与 round-trip', () => {
   });
 
   it('save 后再 read 回来，结构树完全一致', () => {
-    const reader = new SvgReader();
+    const reader = createReader();
     const writer = new SvgWriter();
     const first = reader.readFile(OTHER_SVG);
 
@@ -128,7 +128,7 @@ describe('P7 SVG 写出与 round-trip', () => {
   });
 
   it('未知属性在 round-trip 中保留', () => {
-    const reader = new SvgReader();
+    const reader = createReader();
     const writer = new SvgWriter();
     const result = reader.readSource(
       '<svg width="10" height="10"><text id="t" x="0" y="0" font-size="16" fill="red">hi</text></svg>',

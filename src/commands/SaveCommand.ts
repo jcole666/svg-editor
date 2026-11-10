@@ -33,6 +33,7 @@ export class SaveCommand implements Command {
 
     this.writer.writeFile(document, path);
     document.setSourcePath(path);
+    this.session.markClean();
 
     return [`saved to ${path} (${document.countShapes()} elements)`];
   }

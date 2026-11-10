@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { CommandRegistry } from '../../src/commands/CommandRegistry';
+import { createBuiltinHub } from '../../src/host/builtinHub';
 import { UsageError } from '../../src/commands/UsageError';
 import { InvalidNumberError } from '../../src/model/InvalidNumberError';
 import { NoDocumentError } from '../../src/model/NoDocumentError';
@@ -78,7 +78,7 @@ describe('P2 只读命令与文档命令', () => {
   });
 
   it('注册表能区分已注册与未注册命令', () => {
-    const registry = new CommandRegistry();
+    const registry = createBuiltinHub().commands;
     expect(registry.get('init')).toBeDefined();
     expect(registry.get('no-such-command')).toBeUndefined();
   });

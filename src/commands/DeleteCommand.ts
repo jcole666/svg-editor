@@ -26,6 +26,7 @@ export class DeleteCommand implements UndoableCommand {
     }
 
     const shape = document.require(this.args[0]);
+    document.assertCanLeave(shape);
     this.removed = document.remove(shape.id);
 
     return [`${shape.label()} deleted`];

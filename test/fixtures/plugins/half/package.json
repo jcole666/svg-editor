@@ -1,0 +1,5 @@
+{
+  "name": "@svgframe/plugin-half",
+  "main": "./index.ts",
+  "contributes": { "commands": ["half"] }
+}

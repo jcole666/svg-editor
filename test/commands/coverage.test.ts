@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { Session } from '../../src/app/Session';
-import { CommandRegistry } from '../../src/commands/CommandRegistry';
+import { createBuiltinHub } from '../../src/host/builtinHub';
 
 type ExpectedKind = 'edit' | 'io' | 'display' | 'display-or-io';
 
@@ -36,7 +36,7 @@ const SPEC_COMMANDS: ReadonlyArray<readonly [string, ExpectedKind]> = [
 ];
 
 function kindOf(name: string, args: string[]): string {
-  const registry = new CommandRegistry();
+  const registry = createBuiltinHub().commands;
   const session = new Session();
   const spec = registry.get(name);
   if (spec === undefined) {
@@ -47,7 +47,7 @@ function kindOf(name: string, args: string[]): string {
 
 describe('P9 命令覆盖矩阵', () => {
   it('注册表恰好包含任务书 §3 的全部命令（不缺、不多）', () => {
-    const registry = new CommandRegistry();
+    const registry = createBuiltinHub().commands;
     const registered = registry
       .all()
       .map((spec) => spec.name)
@@ -57,7 +57,7 @@ describe('P9 命令覆盖矩阵', () => {
   });
 
   it('每条命令都有非空的 usage 与 description（help 依赖它们）', () => {
-    const registry = new CommandRegistry();
+    const registry = createBuiltinHub().commands;
     for (const spec of registry.all()) {
       expect(spec.usage.length, `${spec.name} 的 usage 不能为空`).toBeGreaterThan(0);
       expect(spec.description.length, `${spec.name} 的 description 不能为空`).toBeGreaterThan(0);
@@ -79,7 +79,7 @@ describe('P9 命令覆盖矩阵', () => {
   }
 
   it('可撤销命令恰好是 §3 的 10 条图形编辑类', () => {
-    const registry = new CommandRegistry();
+    const registry = createBuiltinHub().commands;
     const edits = registry.all().filter((spec) => {
       const session = new Session();
       return (spec.create([], session).kind ?? 'display') === 'edit';

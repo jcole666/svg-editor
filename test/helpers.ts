@@ -1,8 +1,8 @@
 import { CommandExecutor } from '../src/app/CommandExecutor';
-import { Session } from '../src/app/Session';
 import { ErrorFormatter } from '../src/cli/ErrorFormatter';
 import { Tokenizer } from '../src/cli/Tokenizer';
-import { CommandRegistry } from '../src/commands/CommandRegistry';
+import { createBuiltinHub } from '../src/host/builtinHub';
+import { SvgReader } from '../src/io/SvgReader';
 
 /**
  * 测试用驱动器：模拟 Repl 的那一步"分词 → 查注册表 → 造命令 → 交给执行器"，
@@ -10,9 +10,14 @@ import { CommandRegistry } from '../src/commands/CommandRegistry';
  *
  * 走的是和 Repl 相同的 CommandExecutor，因此撤销历史的行为与线上一致。
  */
+export function createReader(): SvgReader {
+  return new SvgReader(createBuiltinHub().shapes);
+}
+
 export function createRunner(): (line: string) => string[] {
-  const session = new Session();
-  const registry = new CommandRegistry();
+  const hub = createBuiltinHub();
+  const session = hub.session;
+  const registry = hub.commands;
   const tokenizer = new Tokenizer();
   const executor = new CommandExecutor(session);
 

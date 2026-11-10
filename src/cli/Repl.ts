@@ -1,8 +1,10 @@
 import * as readline from 'node:readline';
 
 import { CommandExecutor } from '../app/CommandExecutor';
-import { Session } from '../app/Session';
-import { CommandRegistry } from '../commands/CommandRegistry';
+import type { Session } from '../app/Session';
+import type { CommandRegistry } from '../extension/CommandRegistry';
+import type { ExtensionHub } from '../extension/ExtensionHub';
+import { createBuiltinHub } from '../host/builtinHub';
 import { ErrorFormatter } from './ErrorFormatter';
 import { Tokenizer } from './Tokenizer';
 
@@ -25,14 +27,17 @@ export interface ReplStreams {
  */
 export class Repl {
   private readonly tokenizer = new Tokenizer();
-  private readonly session = new Session();
-  private readonly registry = new CommandRegistry();
-  private readonly executor = new CommandExecutor(this.session);
+  private readonly session: Session;
+  private readonly registry: CommandRegistry;
+  private readonly executor: CommandExecutor;
   private readonly output: NodeJS.WritableStream;
   private readonly rl: readline.Interface;
   private stopped = false;
 
-  constructor(streams: ReplStreams = {}) {
+  constructor(streams: ReplStreams = {}, hub: ExtensionHub = createBuiltinHub()) {
+    this.session = hub.session;
+    this.registry = hub.commands;
+    this.executor = new CommandExecutor(this.session);
     this.output = streams.output ?? process.stdout;
     this.rl = readline.createInterface({
       input: streams.input ?? process.stdin,

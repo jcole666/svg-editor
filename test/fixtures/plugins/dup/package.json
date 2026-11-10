@@ -1,0 +1,8 @@
+{
+  "name": "@svgframe/plugin-dup",
+  "main": "./index.ts",
+  "contributes": {
+    "commands": ["init"],
+    "decorators": ["temp-label"]
+  }
+}

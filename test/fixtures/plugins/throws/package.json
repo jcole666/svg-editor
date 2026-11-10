@@ -1,0 +1,5 @@
+{
+  "name": "@svgframe/plugin-throws",
+  "main": "./index.ts",
+  "contributes": {}
+}

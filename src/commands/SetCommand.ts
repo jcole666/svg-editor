@@ -1,5 +1,8 @@
+import { AttributeSnapshot } from '../app/AttributeSnapshot';
 import type { Session } from '../app/Session';
 import type { UndoableCommand } from '../app/UndoableCommand';
+import { AttributeRegistry } from '../extension/AttributeRegistry';
+import { ConflictingAttributeHandlerError } from '../extension/ConflictingAttributeHandlerError';
 import { UsageError } from './UsageError';
 
 /**
@@ -17,10 +20,13 @@ export class SetCommand implements UndoableCommand {
   private attribute = '';
   private previousValue: string | undefined;
   private hadPrevious = false;
+  private handlerUndo: string | null = null;
+  private snapshot: AttributeSnapshot | null = null;
 
   constructor(
     private readonly args: string[],
     private readonly session: Session,
+    private readonly attributes: AttributeRegistry = new AttributeRegistry(),
   ) {}
 
   execute(): string[] {
@@ -34,6 +40,24 @@ export class SetCommand implements UndoableCommand {
     const attribute = this.args[1];
     const value = this.args[2];
 
+    const matched = this.attributes.matching(shape, attribute);
+    if (matched.length > 1) {
+      throw new ConflictingAttributeHandlerError(attribute);
+    }
+    if (matched.length === 1) {
+      const snapshot = AttributeSnapshot.capture(shape);
+      try {
+        const effect = matched[0].apply(shape, attribute, value);
+        this.snapshot = snapshot;
+        this.handlerUndo = effect.undoSummary;
+        this.shapeId = shape.id;
+        return [effect.summary];
+      } catch (error) {
+        snapshot.restore();
+        throw error;
+      }
+    }
+
     this.shapeId = shape.id;
     this.attribute = attribute;
     this.hadPrevious = shape.hasAttribute(attribute);
@@ -45,6 +69,11 @@ export class SetCommand implements UndoableCommand {
   }
 
   undo(): string[] {
+    if (this.snapshot !== null && this.handlerUndo !== null) {
+      this.snapshot.restore();
+      return [this.handlerUndo];
+    }
+
     const shape = this.session.requireDocument().require(this.shapeId);
 
     if (this.hadPrevious && this.previousValue !== undefined) {

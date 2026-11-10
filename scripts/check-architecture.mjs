@@ -3,14 +3,16 @@
  * 架构检查：扫描 src/ 下真实 import，验证模块依赖方向。
  *
  * 用法：npm run check:arch
- * 规则（与 doc/README.md「依赖方向规则」一致）：
- *   cli      → app, commands
- *   commands → app, model, view, io
- *   app      → model
- *   view     → model
- *   io       → model
- *   model    → （不依赖任何模块）
- *   src/main.ts 是组合根，允许依赖任意模块。
+ * 规则（与 doc/README.md 一致）：
+ *   model     → 不依赖其它模块
+ *   app       → model
+ *   extension → model, app
+ *   view      → model, extension
+ *   io        → model, extension
+ *   commands  → app, model, view, io, extension
+ *   cli       → app, commands, extension, host
+ *   host / main.ts 是组合根，可以依赖各模块
+ * 插件不能依赖 host、cli，也不能依赖别的插件；commands 里只允许用 UsageError。
  *
  * 出现表外依赖即判违规并以退出码 1 结束，方便挂进提交流程。
  */
@@ -23,16 +25,31 @@ const ENTRY = 'root';
 const ALLOWED = new Set([
   'cli -> app',
   'cli -> commands',
+  'cli -> host',
+  'cli -> extension',
   'commands -> app',
   'commands -> model',
   'commands -> view',
   'commands -> io',
+  'commands -> extension',
   'app -> model',
   'view -> model',
+  'view -> extension',
   'io -> model',
+  'io -> extension',
+  'extension -> model',
+  'extension -> app',
+  'host -> app',
+  'host -> model',
+  'host -> view',
+  'host -> io',
+  'host -> cli',
+  'host -> commands',
+  'host -> extension',
 ]);
 
-const MODULES = ['cli', 'commands', 'app', 'view', 'model', 'io'];
+const MODULES = ['cli', 'commands', 'app', 'view', 'model', 'io', 'extension', 'host'];
+const ROOTS = new Set([ENTRY, 'host']);
 
 function collectTypeScriptFiles(dir) {
   const files = [];
@@ -99,7 +116,7 @@ console.log('\n模块依赖边（由真实 import 扫描得出）：');
 const violations = [];
 for (const key of [...edges.keys()].sort()) {
   const [from] = key.split(' ');
-  const allowed = from === ENTRY || ALLOWED.has(key);
+  const allowed = ROOTS.has(from) || ALLOWED.has(key);
   if (!allowed) {
     violations.push(key);
   }
@@ -107,13 +124,68 @@ for (const key of [...edges.keys()].sort()) {
   console.log(`  ${allowed ? 'OK  ' : '违规'} ${key.padEnd(22)} ${count} 处`);
 }
 
-if (violations.length === 0) {
-  console.log('\n依赖方向检查通过：无表外依赖。');
-  process.exit(0);
+if (violations.length > 0) {
+  console.error(`\n依赖方向检查失败：${violations.length} 条表外依赖`);
+  for (const violation of violations) {
+    console.error(`  - ${violation}`);
+  }
+  process.exit(1);
 }
 
-console.error(`\n依赖方向检查失败：${violations.length} 条表外依赖`);
-for (const violation of violations) {
-  console.error(`  - ${violation}`);
+const pluginViolations = scanPlugins();
+if (pluginViolations.length > 0) {
+  console.error(`\n插件依赖检查失败：${pluginViolations.length} 处`);
+  for (const violation of pluginViolations) {
+    console.error(`  - ${violation}`);
+  }
+  process.exit(1);
 }
-process.exit(1);
+
+console.log('\n依赖方向检查通过：无表外依赖。');
+process.exit(0);
+
+function scanPlugins() {
+  const root = 'plugins';
+  const found = [];
+  if (!exists(root)) {
+    return found;
+  }
+  for (const file of collectTypeScriptFiles(root)) {
+    const text = readFileSync(file, 'utf8');
+    const own = pluginNameOf(file);
+    for (const match of text.matchAll(/from\s+'(\.[^']+)'/g)) {
+      const resolved = relative(process.cwd(), join(file, '..', match[1])).split(sep);
+      const pluginIndex = resolved.indexOf('plugins');
+      if (pluginIndex >= 0 && resolved[pluginIndex + 1] !== own) {
+        found.push(`${file} -> ${match[1]}`);
+        continue;
+      }
+      const srcIndex = resolved.indexOf('src');
+      if (srcIndex < 0) {
+        continue;
+      }
+      const mod = resolved[srcIndex + 1];
+      const fileName = resolved[resolved.length - 1];
+      const usageError = mod === 'commands' && fileName === 'UsageError';
+      if ((mod === 'host' || mod === 'cli' || mod === 'commands') && !usageError) {
+        found.push(`${file} -> ${match[1]}`);
+      }
+    }
+  }
+  return found;
+}
+
+function pluginNameOf(file) {
+  const parts = file.split(sep);
+  const index = parts.lastIndexOf('plugins');
+  return index >= 0 ? parts[index + 1] : '';
+}
+
+function exists(dir) {
+  try {
+    return statSync(dir).isDirectory();
+  } catch {
+    return false;
+  }
+}
+

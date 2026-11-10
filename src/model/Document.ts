@@ -1,3 +1,4 @@
+import { CannotModifyCompositeError } from './CannotModifyCompositeError';
 import { DuplicateIdError } from './DuplicateIdError';
 import { Group } from './Group';
 import { NoSuchShapeError } from './NoSuchShapeError';
@@ -94,6 +95,7 @@ export class Document {
    * id 重复时抛 DuplicateIdError，且不改变任何状态（先校验后修改）。
    */
   add(shape: Shape, parent?: Group): void {
+    this.assertIdsAvailable(shape);
     this.registerSubtree(shape);
     this.attach(shape, parent ?? null, parent === undefined ? this.rootShapes.length : parent.children().length);
   }
@@ -103,8 +105,20 @@ export class Document {
    * index 越界时退化为追加到末尾。
    */
   insert(shape: Shape, parent: Group | null, index: number): void {
+    this.assertIdsAvailable(shape);
     this.registerSubtree(shape);
     this.attach(shape, parent, index);
+  }
+
+  /**
+   * delete / group / addto 在动手之前调用。
+   * 父容器拒绝时整条命令失败，文档保持原样。
+   */
+  assertCanLeave(shape: Shape): void {
+    const parent = shape.parent;
+    if (parent !== null && !parent.canDetach(shape)) {
+      throw new CannotModifyCompositeError(parent.id);
+    }
   }
 
   /**
@@ -188,6 +202,15 @@ export class Document {
       return 0;
     }
     return index > max ? max : index;
+  }
+
+  private assertIdsAvailable(shape: Shape): void {
+    if (this.shapesById.has(shape.id)) {
+      throw new DuplicateIdError(shape.id);
+    }
+    for (const child of shape.childShapes()) {
+      this.assertIdsAvailable(child);
+    }
   }
 
   private registerSubtree(shape: Shape): void {

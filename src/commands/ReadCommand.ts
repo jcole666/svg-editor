@@ -1,6 +1,7 @@
 ﻿import type { Session } from '../app/Session';
-import { SvgReader } from '../io/SvgReader';
 import type { Command } from '../app/Command';
+import type { ShapeCatalog } from '../extension/ShapeCatalog';
+import { SvgReader } from '../io/SvgReader';
 import { UsageError } from './UsageError';
 
 /**
@@ -11,11 +12,11 @@ import { UsageError } from './UsageError';
  */
 export class ReadCommand implements Command {
   readonly kind = 'io' as const;
-  private readonly reader = new SvgReader();
 
   constructor(
     private readonly args: string[],
     private readonly session: Session,
+    private readonly shapes: ShapeCatalog,
   ) {}
 
   execute(): string[] {
@@ -24,7 +25,7 @@ export class ReadCommand implements Command {
     }
 
     const path = this.args[0];
-    const result = this.reader.readFile(path);
+    const result = new SvgReader(this.shapes).readFile(path);
 
     result.document.setSourcePath(path);
     this.session.setDocument(result.document);

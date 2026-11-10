@@ -48,6 +48,9 @@ export class GroupCommand implements UndoableCommand {
     GroupCommand.assertUniqueMembers(ids);
     const shapes = ids.map((id) => document.require(id));
     GroupCommand.assertNoCycle(shapes);
+    for (const shape of shapes) {
+      document.assertCanLeave(shape);
+    }
 
     // 先在没有任何改动时记录原始位置
     const origins: Origin[] = shapes.map((shape) => ({

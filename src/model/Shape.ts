@@ -61,6 +61,29 @@ export abstract class Shape {
     return false;
   }
 
+  /**
+   * tree 上显示的名字。普通图形就是 label()。
+   * box 要显示成 g#id，后面的 (box) 由树标签插件补，所以它单独覆写这里。
+   */
+  treeLabel(): string {
+    return this.label();
+  }
+
+  /** create 想换一句反馈时覆写；null 表示用默认的 "rect#id created"。 */
+  creationSummary(): string | null {
+    return null;
+  }
+
+  /** 只有普通分组能 ungroup。叶子返回 false，box 再覆写一次。 */
+  canUngroup(): boolean {
+    return false;
+  }
+
+  /** delete / group / addto 想把 child 带走之前问一句。z-order 只是换位置，不走这里。 */
+  canDetach(_child: Shape): boolean {
+    return true;
+  }
+
   // ---- 子类必须实现的多态行为 ----
 
   /** SVG 标签名，也是 create 的类型名：rect / circle / ellipse / line / text / g */
@@ -155,6 +178,36 @@ export abstract class Shape {
 
   label(): string {
     return `${this.typeName()}#${this.id}`;
+  }
+
+  /**
+   * 给"自上次保存以来有没有变"用。
+   * 只记这个节点自己的几何、属性和子节点 id，子孙的坐标由调用方再往下看。
+   */
+  stateKey(): string {
+    const geometry = this.geometryAttributes()
+      .map((name) => `${name}=${this.getAttr(name) ?? ''}`)
+      .join(',');
+    const presentation = [...this.presentation.entries()]
+      .sort((left, right) => (left[0] < right[0] ? -1 : left[0] > right[0] ? 1 : 0))
+      .map(([name, value]) => `${name}=${value}`)
+      .join(',');
+    const children = this.childShapes()
+      .map((child) => child.id)
+      .join(',');
+    return `${this.typeName()}#${this.id}|${geometry}|${presentation}|${children}`;
+  }
+
+  /** 属性快照用。undo 时整表换回去，避免只 set 一次却删不掉新加的属性。 */
+  capturePresentation(): ReadonlyArray<readonly [string, string]> {
+    return [...this.presentation.entries()];
+  }
+
+  restorePresentation(entries: ReadonlyArray<readonly [string, string]>): void {
+    this.presentation.clear();
+    for (const [name, value] of entries) {
+      this.presentation.set(name, value);
+    }
   }
 
   /**

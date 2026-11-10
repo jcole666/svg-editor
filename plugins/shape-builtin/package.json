@@ -1,0 +1,9 @@
+{
+  "name": "@svgframe/plugin-shape-builtin",
+  "private": true,
+  "version": "0.1.0",
+  "main": "./index.ts",
+  "contributes": {
+    "shapes": ["rect", "circle", "ellipse", "line", "text", "g"]
+  }
+}

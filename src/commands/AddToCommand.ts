@@ -36,6 +36,7 @@ export class AddToCommand implements UndoableCommand {
     }
 
     const shape = document.require(this.args[1]);
+    document.assertCanLeave(shape);
 
     // 防环：不能把容器挪进它自己的后代的内部
     if (shape === target || shape.contains(target)) {

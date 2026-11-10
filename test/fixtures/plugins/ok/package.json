@@ -1,0 +1,5 @@
+{
+  "name": "@svgframe/plugin-ok",
+  "main": "./index.ts",
+  "contributes": { "commands": ["ok"] }
+}

@@ -1,5 +1,5 @@
 ﻿import type { Command } from '../app/Command';
-import type { CommandSpec } from './CommandSpec';
+import type { CommandSpec } from '../extension/CommandSpec';
 
 /**
  * help —— 显示全部命令与语法。
