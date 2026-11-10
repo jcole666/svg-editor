@@ -1,0 +1,21 @@
+{
+  "name": "svg-outline",
+  "displayName": "SVG 标记与大纲",
+  "description": "资源管理器里给 svg 文件加 []，并用大纲显示元素层级",
+  "version": "0.1.0",
+  "publisher": "local",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": ["Other"],
+  "activationEvents": ["onStartupFinished"],
+  "main": "./dist/extension.js",
+  "scripts": {
+    "compile": "tsc -p ."
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "@types/vscode": "^1.85.0",
+    "typescript": "^5.6.3"
+  }
+}

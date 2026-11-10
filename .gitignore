@@ -3,8 +3,8 @@ node_modules/
 dist/
 coverage/
 
-# 编辑器与系统
-.vscode/
+# 编辑器与系统（只忽略仓库根上的，扩展自己的启动配置要交）
+/.vscode/
 .idea/
 .DS_Store
 Thumbs.db
