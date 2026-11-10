@@ -6,6 +6,7 @@ export const CODED_PLUGINS = [
   'plugins/command-stats',
   'plugins/command-dir',
   'plugins/shape-box',
+  'plugins/tree-modified-star',
 ];
 
 export async function activateCodedPlugins(hub: ExtensionHub, log?: LoaderLog): Promise<void> {
