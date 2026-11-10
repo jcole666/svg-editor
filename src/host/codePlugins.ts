@@ -5,6 +5,7 @@ import { PluginLoader, repoRoot, type LoaderLog } from './PluginLoader';
 export const CODED_PLUGINS = [
   'plugins/command-stats',
   'plugins/command-dir',
+  'plugins/shape-box',
 ];
 
 export async function activateCodedPlugins(hub: ExtensionHub, log?: LoaderLog): Promise<void> {
