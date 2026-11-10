@@ -1,383 +1,303 @@
-# PJ1 Phase 1：CLI SVG 编辑器
+# PJ1 Phase 2：插件实践和插件式重构
 
-用 TypeScript 写的一个命令行 SVG 编辑器，跑在 Node 上。总共 19 条命令，能建图形、改属性、分组、存读文件，也支持撤销重做。
+Phase 1 的命令行编辑器还在这个仓库里，tag `final` 没动。这一阶段做了两件事：一个 VSCode 扩展，以及把 CLI 改成可以挂插件。原有 19 条命令和六种图形的行为没有改，不装新插件时 `tree` 的输出和以前逐字节一样。
 
-仓库地址：https://github.com/jcole666/svg-editor （最终版本打在 tag `final` 上）
+第一阶段的说明挪到了 [phase1.md](phase1.md)。
+
+仓库：https://github.com/jcole666/svg-editor  
+本阶段 tag：`p2`
 
 ---
 
-## 一、架构方案
+## 一、VSCode 扩展
 
-### 1. 模块划分
+代码在 `vscode/svg-outline`。它不进 CLI 的行数统计。
 
-分成六层，划分依据是依赖方向：上层可以调用下层，下层不认识上层。这样每层职责单一，改动也只会往上影响调用它的模块，不会波及无关部分。
+### 怎么跑
 
-现在一共六个模块，外加一个入口：
+```powershell
+cd vscode/svg-outline
+npm install
+npm run compile
+```
 
-| 模块 | 职责 | 文件数 | 行数（整个模块合计） |
-|---|---|---|:-:|
-| `src/cli/` | REPL 循环、分词、错误格式化、控制台输入输出 | 3 | 185 |
-| `src/app/` | 应用层：Command 契约、命令栈、执行器、Session | 9 | 244 |
-| `src/commands/` | 19 条命令的具体实现、命令注册表、图形工厂 | 22 | 1264 |
-| `src/view/` | tree 和 show 的文本渲染 | 2 | 76 |
-| `src/model/` | 图形类层次、Document、领域错误 | 19 | 1150 |
-| `src/io/` | SVG 读写、XML 解析 | 6 | 541 |
+用 VSCode 打开 `vscode/svg-outline` 这个目录，按 F5。扩展开发宿主里打开 `fixtures`，`example.svg` 右边会出现 `[]`，`plain.txt` 和文件夹没有。打开 `example.svg`，左下角大纲能看到 `svg`、`g#flow`、`rect#start`，没有 id 的文字只显示 `text`。点 `rect#start` 会跳到对应那一行。把 XML 写成一半时大纲清空，扩展不会崩。
 
-平均每个文件 50 行左右——任务书要求"一类一文件"，所以文件数量多，但大部分都很短（比如 11 个错误类，每个只有 5 行）。
+两张效果图还没放进仓库。F5 打开 `fixtures` 之后，把资源管理器里只有 `example.svg` 带 `[]` 的那张，和大纲里点到 `rect#start` 的那张，存到 `docs/images/`。
 
-`src/main.ts` 只有 9 行，负责把 Repl 装配起来启动。
+### VSCode 和插件各管什么
 
-多出来的 `app` 层，是因为"命令对象"要能被撤销栈保存、之后再重新调用。它既不属于 CLI（CLI 只是发起请求），也不属于模型（模型只管数据长什么样）。单独抽出来以后，命令栈、执行器、Session 都有地方放了。
+资源管理器和大纲视图是 VSCode 自己的。插件做的事只有两件：在 `activate` 里调用 `registerFileDecorationProvider` 和 `registerDocumentSymbolProvider`。之后什么时候问「这个文件要不要徽章」「这份文档的符号树是什么」，都是 VSCode 来调用我注册的对象。插件不自己画树，也不改文件名或文件内容。
 
-这样划分的直接结果是：加一条新命令只需要动 `commands/` 和注册表；改 tree / show 的显示格式只需要动 `view/`；改 SVG 读写只需要动 `io/`；`model/` 和 `app/` 都不用动。
+文件装饰和课件里的 Decorator 不是一回事。Decorator 是包住一个已经有的对象，对外还是原来的接口，只是多了一层行为。这里没有一个 File 对象被包起来。VSCode 规定了 `FileDecorationProvider` 这个接口，插件把「是不是 svg」翻译成一个 `FileDecoration`。这个角色更接近适配器：VSCode 要的是它自己的接口，svg 文件只是路径，两边对不上，插件在中间做转换。和经典适配器的差别是，被适配的那一方并没有一个现成的类，只是文件名和 `stat` 的结果。
 
-组件图（PlantUML）：
+大纲同理。`DocumentSymbolProvider` 是 VSCode 的端口，`parseOutline` 只负责从文本算出名字和行列号。
+
+### 能不能复用 Phase 1 的解析器
+
+文件标记完全用不到解析器，看后缀就够了。
+
+大纲想复用 `XmlParser` 和 `Shape`，试下来不行。CLI 的解析器解析失败会抛错，也不记录每个标签在第几行。大纲在用户正打字时经常遇到不完整的 XML，这时要返回空列表，不能把异常抛出去。另外扩展跑在 VSCode 的进程里，没必要把 `Document`、命令栈这些拖进来。所以 `vscode/svg-outline/src/outline.ts` 是单独写的一个小解析器，只认标签、属性和嵌套。
+
+测试在 `test/vscode/outline.test.ts`，覆盖嵌套、无 id、改完文本后行号变化、半截 XML。
+
+---
+
+## 二、CLI 现在怎么分成几块
+
+Phase 1 是六层，命令和图形都写死在 `CommandRegistry` 和 `ShapeFactory` 里。那两处当时就标了「等插件化再改」。这一阶段把它们拆开了。
 
 ```plantuml
 @startuml
 skinparam componentStyle rectangle
-skinparam defaultTextAlignment center
 
-component "cli\nREPL · 分词 · 错误格式化\n3 文件 / 185 行" as cli
-component "commands\n19 条命令 · 注册表 · 图形工厂\n22 文件 / 1264 行" as commands
-component "app\nCommand 契约 · 命令栈 · 执行器\n9 文件 / 244 行" as app
-component "view\ntree / show 文本渲染\n2 文件 / 76 行" as view
-component "io\nSVG 读写 · XML 解析\n6 文件 / 541 行" as io
-component "model\nShape 类层次 · Document\n19 文件 / 1150 行" as model
-
-cli --> commands
-cli --> app
-commands --> app
-commands --> view
-commands --> io
-commands --> model
-app --> model
-view --> model
-io --> model
+package "Phase 1" {
+  component "cli" as cli1
+  component "commands\n命令 + 注册表 + 工厂" as cmd1
+  component "app" as app1
+  component "view" as view1
+  component "io\n读入时 switch 标签" as io1
+  component "model" as model1
+  cli1 --> cmd1
+  cmd1 --> app1
+  cmd1 --> view1
+  cmd1 --> io1
+  cmd1 --> model1
+  app1 --> model1
+  view1 --> model1
+  io1 --> model1
+}
 @enduml
 ```
 
-渲染结果：
+```plantuml
+@startuml
+skinparam componentStyle rectangle
 
-![组件图](architecture.png)
+package "内核" {
+  component "extension\n四个扩展点" as ext
+  component "commands\n19 条内置命令的类" as cmd
+  component "app / view / io / model" as core
+  cmd --> ext
+  cmd --> core
+  core --> ext
+}
 
-### 2. 用了哪些设计模式
+package "装配处 src/host" {
+  component "builtinHub\n默认装 19 条命令和六种图形" as boot
+  component "PluginLoader\n按字符串加载" as loader
+  component "codePlugins.ts\n方式 A 的名单" as code
+}
 
-#### Command
+package "插件 plugins/" {
+  component "shape-builtin" as shapes
+  component "stats / dir / box / star" as extra
+}
 
-任务书要求必须用 Command，项目本身也确实需要：要有撤销，就得让"动作"能被存下来再重新执行。一行 `shape.x += dx` 是存不下来的，得是个对象才行。
+boot --> ext
+boot --> shapes
+code --> loader
+loader --> extra
+extra --> ext
+@enduml
+```
 
-按课件里的五个角色对一下：
+依赖方向用 `npm run check:arch` 扫真实 import。内核可以依赖扩展点接口，不能依赖某个插件。插件可以依赖 `model`、`app`、`extension`、`io`，以及 `UsageError`。不能依赖 `host`、`cli`，也不能 import 另一个插件。`src/host` 和 `src/main.ts` 是组合根，允许认识具体插件。
 
-| 课件里的角色 | 我这里的类 |
+不带任何参数启动时，只装内置的 19 条命令和六种图形。`stats`、`dir`、`box`、树标签都不会出现，Phase 1 的测试仍然是原来的断言。
+
+---
+
+## 三、扩展点清单
+
+四个接口都在 `src/extension/`。插件通过 `PluginContext` 登记，内核其它地方只拿注册表。
+
+| 接口 | 干什么 | 内核在哪调用 | 现在的实现 | 不装时 | 违反契约时 |
+|---|---|---|---|---|---|
+| `ShapeProvider` | 一种图形的创建和读回 | `CreateCommand.execute` 调 `ShapeCatalog.create`；`SvgReader.buildShape` 调 `ShapeCatalog.readerFor` 再调 `read` | `plugins/shape-builtin` 的 rect / circle / ellipse / line / text / g，外加 `BoxProvider` | `create` 不认识的类型报 `unknown shape type`；读入时没有对应标签就跳过。`data-kind` 没有插件认领时按普通标签读 | 类型名或标签重复时 `DuplicateRegistrationError`，加载器打印 `error: duplicate registration: shapes/<name>` 并撤回这个插件 |
+| `CommandSpec` | 一条命令的名字、help 和工厂 | `Repl.handleLine` 调 `CommandRegistry.get` | 19 条内置命令在 `registerBuiltinCommands` 里登记；`stats`、`dir` 由各自插件登记 | 未登记的名字由 `Repl.handleLine` 打印 `error: unknown command: <name>` | 命令名重复同样走 `duplicate registration: commands/<name>` |
+| `TreeDecorator` | 结构树每一行行尾的标签 | `TreeCommand.execute` 把 `DecoratorRegistry.all()` 传给 `TreeRenderer`；真正拼接在 `TreeRenderer.finish` | `BoxLabel` 写 `(box)`，`ModifiedStar` 写 `*` | 装饰器数组为空时 `finish` 原样返回，不加空格 | 同名装饰器重复登记会被拒绝并撤回 |
+| `AttributeHandler` | 对某类图形设置某个属性时具体改什么 | `SetCommand.execute` 调 `AttributeRegistry.matching` | `BoxAttributeHandler`，注册名 `box-attributes` | 没有命中时走 Phase 1 的 `Shape.setAttr`。白名单外仍是 `unknown attribute` | 两个处理器同时 `handles` 返回 true：`ConflictingAttributeHandlerError`，文案 `conflicting attribute handlers: <attr>`，不执行任何一个 |
+
+内置图形也走 `ShapeProvider`，只是默认装配一定会装上，不写进 `plugins.config.json`。这样禁用「可选插件」时六种图形还在。
+
+---
+
+## 四、两种装配
+
+两条路最后都进 `PluginLoader.loadSpecifier`。差别只在谁决定加载哪一个模块。
+
+**方式 A，改代码。** `src/host/codePlugins.ts` 里有一个数组，`activateCodedPlugins` 按顺序调用加载器。新增插件要改这一处并重新构建。
+
+```powershell
+npm run cli -- --code-plugins
+```
+
+**方式 B，改配置。** 仓库根的 `plugins.config.json`。已有的 ts 源码不用改。
+
+```powershell
+npm run cli -- --config plugins.config.json
+```
+
+配置的形状：
+
+```json
+{
+  "plugins": [
+    { "module": "./plugins/command-stats" },
+    { "module": "./plugins/command-dir", "options": { "cwd": "D:/tmp/sample" } },
+    { "module": "@svgframe/plugin-shape-box" },
+    { "module": "./plugins/tree-modified-star", "enabled": false }
+  ]
+}
+```
+
+- 按数组顺序加载。`enabled: false` 整项跳过，路径不存在也不报。
+- 以 `./` 开头的路径相对配置文件所在目录，不是进程的 cwd。
+- 包名交给 Node 的 `require.resolve`，加载器里没有插件名对照表。
+- `options` 原样传给 `activate(ctx, options)`。`dir` 如果收到 `options.cwd` 就列那个目录，否则用 `process.cwd()`。
+- 每个插件的 `package.json` 用 `contributes` 声明 `shapes` / `commands` / `decorators` / `attributes`。缺省当空数组。加载成功后比较声明和实际登记的名字集合，顺序无关。
+
+失败时打印一行，进程继续，已经成功的插件保留：
+
+| 情况 | 输出 |
 |---|---|
-| Command | `src/app/Command.ts`（`execute(): string[]`） |
-| ConcreteCommand | `CreateCommand`、`MoveCommand` 等 10 个可撤销命令 |
-| Invoker | `Repl` + `CommandExecutor` |
-| Client | `CommandRegistry`（造命令、设接收者） |
-| Receiver | `Document` / `Shape` |
+| 模块找不到 | `error: plugin not found: <module>` |
+| 没有默认导出 | `error: plugin has no default export: <module>` |
+| 清单和实际登记不一致 | `error: plugin manifest mismatch: <name> (declared: …, registered: …)` |
+| `activate` 抛错，或模块找到了但求值失败 | `error: plugin failed to activate: <name> (<reason>)` |
+| 注册名重复 | `error: duplicate registration: <category>/<name>` |
+| 配置本身不是合法结构 | `error: invalid plugin config`，然后只用内置能力 |
 
-约束是命令里不许写业务逻辑，只做参数校验然后转发给 Document。课件里讲到：「命令类里只该有转发这一件事，出现业务判断和状态维护就说明写成了过程式代码。」
+清单不一致、激活失败、重复注册，都会把这个插件已经登记的东西撤掉。比较发生在 `activate` 返回之后，见 ADR 4。
 
-#### Composite
+方式 A 的证据是 `819e40b`（登记 box）。`git diff --name-status 819e40b^ 819e40b` 只有 `plugins/shape-box/` 和 `src/host/codePlugins.ts`。下面这条对内核、加载器和已经存在的插件是空的：
 
-`<g>` 是容器，`<rect>` 是叶子。如果每条命令都区分两者，就得写 `switch(tag)`，以后加一种图形还要回头改所有命令。
-
-做法是让 `Group` 也继承 `Shape`。`moveBy` 在叶子上改自己的坐标，在容器上就是遍历子节点递归调用。调用方只写 `shape.moveBy(dx, dy)`，完全不知道手里拿的是哪种。这样"容器与叶子统一操作"就成立了。
-
-#### 没用的模式，以及原因
-
-- Iterator：`tree` 就一个递归遍历，结构也不变，没必要再套一层迭代器。
-- Memento：撤销已经用 Command 解决了，再叠一层只会让"每条命令记什么"变模糊。
-- Visitor：这个项目"加操作"不频繁，就 tree/show/save 三处，用多态方法够了。
-
-### 3. 依赖方向
-
-规则是：
-
-```text
-cli      ->  app, commands
-commands ->  app, model, view, io
-app      ->  model
-view     ->  model
-io       ->  model
-model    ->  谁也不依赖
+```powershell
+git diff 819e40b^ 819e40b -- src/commands src/model src/app src/view src/io src/cli src/extension plugins/shape-builtin plugins/command-stats plugins/command-dir
 ```
 
-`main.ts` 是入口，算例外，可以依赖任何模块。
+`stats`（`eb9398c`）、`dir`（`799f938`）、星号（`5d73102`）同样只动了自己的目录和 `codePlugins.ts`。
 
-这么定的理由：`model` 是领域核心，不 import 任何上层，所以它最稳、也最好测（30 个接收者层测试完全不碰上层）。`app` 只依赖 model，这样加新命令不用动命令栈。`commands` 是最杂的一层，所有协作都在这里发生，所以依赖最多。`cli` 只依赖 app 和 commands，它不该认识图形。
+方式 B 在分支 `demo/box-config`，提交 `0ff270a`，父提交是扩展点那次 `b46d9fa`。`git diff --name-status b46d9fa 0ff270a` 只有 `plugins/shape-box/` 和一份只列 box 的 `plugins.config.json`。主线上的配置清单是另一次提交 `c0723e8`，列了四个可选插件。`test/plugins/stats.test.ts` 和 `test/plugins/dir.test.ts` 对同一输入比较了两种装配的输出。
 
-渲染器放 `view/` 而不是 `cli/`，就是因为 `TreeCommand` 要用它——放 cli 里就变成 commands 反向依赖 cli 了。
+---
 
-这条规则不是靠自觉维持的。我写了 `scripts/check-architecture.mjs`，`npm run check:arch` 会扫一遍真实 import、画成边表对照白名单，出现表外依赖就报错退出。
+## 五、dir 和适配器
 
-### 4. 变化点假设
+`dir` 不接收参数，列出的是进程当前工作目录的直接子项，不是当前 svg 所在的目录。`read` / `save` 不改变它。隐藏文件要列出，不列 `.` 和 `..`。目录在前，普通文件在后，符号链接单独一组，各组按名字的码点升序。标记和名字之间是两个空格，所以是 `[DIR]  docs`、`[FILE]  demo.svg`。空目录打印 `(empty directory)`。读失败打印 `error: cannot read directory: <path>`，然后还能继续敲别的命令。
 
-| 可能变的地方 | 留了什么，或者为什么不留 |
+没执行 `init` 也可以用。成功或失败都不改文档，不进 undo 栈。
+
+符号链接用 `lstat` 那种「不跟随」的判断，显示成 `[LINK]`，不走进去看目标是文件还是目录。
+
+对应适配器的角色：
+
+| 角色 | 类 |
 |---|---|
-| 加新命令（copy、paste 之类） | 加一个类 + 注册表一行，命令栈不用动 |
-| 加新图形类型（box、path） | 工厂加个注册 + 一个 Shape 子类。没做插件化，因为任务书 §2.1 说本阶段允许架构层没有插槽，box 按 §4.4 是下一阶段的事，现在提前抽象容易猜错方向 |
-| 渲染或序列化格式变化 | 出口只有 `Shape.toSvg()`，改动收在各子类里。`transform` 目前只保存不应用，这是已知缺口，不算预留 |
-| tree / show 的显示格式 | 都在 view 两个渲染器里，命令层感觉不到 |
-| 撤销粒度改成事务或宏 | `CommandStack` 是唯一入口，宏命令实现 `UndoableCommand` 组合子命令就行 |
-| 持久化格式扩展（defs、CSS） | io 完全隔离。目前没支持 defs 和 CDATA，边界写在 `XmlParser` 注释里 |
-| 命令分发改成插件注册 | `CommandRegistry` 是唯一的集中点，注释里标了"待重构" |
-| 多文档或多视图 | Session 是唯一持有当前文档的地方。单文档已经够用，先不引入 |
+| Target，命令希望看到的目录接口 | `DirectoryListing` |
+| Adapter | `NodeFsDirectoryListing`，把 `fs.readdirSync` 的 `Dirent` 收成 `{ name, kind }` |
+| Adaptee | `node:fs` |
+| Client | `DirCommand`，只依赖 `DirectoryListing` |
+
+测试替身直接实现 `DirectoryListing`。真实目录的测试用临时文件夹加上 `NodeFsDirectoryListing`。两种装配传进同一个 `DirCommand` 和同一份 `options.cwd`，输出逐字节相同。
 
 ---
 
-## 二、和 AI 协作的过程记录
+## 六、box、属性和树标签
 
-这个项目是我和 Codex（OpenAI 的 AI 编程助手）一起做的。阶段怎么分、每步做到什么算完成由我定，代码和测试主要交给 Codex 写，每写完一步我跑一遍测试、再手工敲几条命令确认，没问题才继续。下面记的是这个过程里发现的问题，主要是 Codex 写的东西哪里不对、我怎么发现的。
+`create box n1 120 100 160 60 "开始"` 会做出 `g` + `rect#n1-rect` + `text#n1-label`。矩形默认填充 `#4a90d9`，文字放在 `(x+20, y+h/2+5)`，160×60 的框就是 `(140,135)`，和 §6.1 版本 B 对得上。
 
-### P0 搭骨架
+命令反馈用 `box#n1`，树的标题用 `g#n1`，行尾由 `BoxLabel` 追加 `(box)`。这两件事分开，是因为树的标签要求渲染器不认识 box。
 
-先让 Codex 把 TypeScript 工程和空 REPL 搭起来。跑起来发现敲 `exit` 会崩，报 `ERR_USE_AFTER_CLOSE`。原因是关掉 readline 之后又调了一次 `prompt()`。加个 `stopped` 标志，关了就不再 prompt 才修好。
+`set n1 fill #f5a623` 改内部矩形，`set n1 label "..."` 改内部文字。各是一次 undo。`ungroup` 报 `cannot ungroup composite shape`。`delete` / `addto` / `group` 想把 `n1-rect` 或 `n1-label` 带走时拒绝，文案是 `cannot modify composite shape structure: n1`。`front` / `back` 只是在同一个父节点里换位置，仍然允许。
 
-### P1 图形模型
+序列化是 `<g id="n1" data-kind="box">`。装了插件就还原成 box；没装就当普通 `g`，`data-kind` 当作普通属性留下来。缺了矩形或文字、或者类型不对，整份 `read` 失败，原来的文档不动。文件里出现重复的显式 id 也拒绝整份读入，不靠再分配一个 id 把冲突藏起来。
 
-让 Codex 拆出 `Shape` 抽象基类和六个子类。这里我自己改过一次：它写的 `attributeSummary()` 用两个空格拼几何和 fill，输出成 `h=600  fill=...`，跟任务书 §5.1 的单空格对不上。是单元测试按精确字符串断言才暴露出来的。
+`stats` 从画布子节点深度优先。叶子按类型计数，顺序是第一次遇到的顺序。普通 `g` 和 `box` 只算 containers，根 svg 不算。box 里面的矩形和文字照常算进 total。不进 undo 栈。
 
-还有个规格本身含糊的地方：§6.1 里 line 是带 `stroke=black` 创建的，但 tree 输出里只显示 `(280,130) -> (520,130)`，没有 stroke。我最后定的规则是 tree 只内联 fill，stroke 收到 show 明细里，跟 §5.2 保持一致。这条也写进代码注释了。
-
-### P2 文档模型和只读命令
-
-加 Document 和 init/canvas/tree/show/help。
-
-这段踩了个依赖方向的坑：一开始我把渲染器放在 `src/cli/`，写完发现 `TreeCommand` 要 import 它，于是 commands 反向依赖了 cli。后来新建 `src/view/` 才顺过来。
-
-还有 tree 的对齐规则。任务书示例里各列宽度其实不一致（外层大概 15 列，内层 11 列），推不出唯一规则。我定了"同一组兄弟按最宽 label 加 2 空格对齐"，然后用测试把输出逐字锁住。不然每次 label 长度一变，diff 全是空白变动。
-
-### P3 create 和图形工厂
-
-这段有个真 bug，是测试抓到的。
-
-分词器一开始我把 `#` 当注释处理，结果 `create rect start 120 100 160 60 #4a90d9 in node1` 里，颜色值 `#4a90d9` 连同后面的 `in node1` 全被吞了，图形挂到了画布根上。回去翻任务书 §2 才发现原文是「`#` 开头为注释」，指的是整行，不是我理解的"行内注释"。改成行首判断后又补了 7 个分词器测试（颜色值、引号里的 `#`、空行）。
-
-`in` 子句也有个歧义：`create text t1 0 0 "in"` 里内容是 "in"，如果按"参数里包含 in 就拆"会误判。所以改成看位置，倒数第二个 token 正好是 `in` 才算子句。
-
-### P4 编辑命令
-
-这一阶段没什么争议，四条命令都只是校验参数然后转发。
-
-倒是 `move` 的反馈格式要自己定：任务书里叶子是 `moved to (130,100)`，容器是 `moved by (0,100)`。我在 Shape 上加了 `referencePoint()`，叶子返回参照点，容器返回 null，一个方法就同时满足了两种输出。
-
-### P5 撤销重做
-
-这是花时间最多的一段，也是我先做错再改对的一次。
-
-第一版用的是快照：每次编辑前把整个文档深拷贝一份存着，撤销就整份换回去。十几分钟写完，98 个测试也都过。但测了一下代价：
-
-| 图形数 | 每次编辑的快照耗时 | 克隆对象数 |
-|---|---|---|
-| 1000 | 0.156 ms | 1001 |
-| 5000 | 0.651 ms | 5001 |
-
-更要命的是它给不出任务书 §6 要求的那种反馈：
-
-```
-svg> undo
-circle#c1 moved back to (100,100)
-```
-
-快照法只知道"整份文档变回某个样子了"，不知道是哪条命令被撤销，这句话根本印不出来。课件命令模式那讲也提到过：AI 可能直接给你快照方案，要在提示词里说清要哪一种。
-
-所以推倒重写成 Command 模式：`UndoableCommand` 在 `execute()` 之外加 `undo()`，`CommandStack` 用两个栈管着，执行时清空 redo 栈，撤销时把命令转到 redo 栈，重做就重新 `execute()`。
-
-每条命令记的东西不一样，这块比想象中费脑子：
-
-- create 记住创建出来的对象引用，撤销就是删掉它
-- delete 要记 `{ shape, parent, index }`。只记对象不够——得放回原来的父容器、原来那个位置，不然兄弟顺序变了，z-order 就错了
-- move 和 scale 记被改动那棵子树的几何值
-- set 除了记旧值，还要记"原来有没有这个属性"。比如原本没有 fill，`set r1 fill red` 撤销时要整个删掉，不能设成空字符串
-
-move/scale 这里我一开始想用反向运算（`moveBy(-dx,-dy)`、`scaleBy(1/f)`），试了一下发现浮点不保证可逆，10 乘 3 再除 3 会得到 9.999999999999998。后来改成记旧几何值再写回去，还专门写了条测试守着。
-
-改完之后同样的操作：
-
-| 图形数 | 快照法 | Command 法 | 快了 |
-|---|---|---|---|
-| 1000 | 0.156 ms | 0.0039 ms | 40 倍 |
-| 5000 | 0.651 ms | 0.0006 ms | 1124 倍 |
-
-差距原因很直白：快照的代价跟整份文档规模成正比，命令只跟"这次改了多少"成正比。
-
-这次重构没动 `Repl`，也没动 `CommandRegistry`，只改了 `app/` 内部和 5 个命令类。界限划清楚之后，改动范围确实关得住。
-
-### P6 容器命令
-
-group / ungroup / addto / front / back 功能不难，但容易把树改坏。
-
-第一，得防环。`group bad c1 markers`（markers 里已经装着 c1）如果不拦，就会造出"自己包含自己"的树，tree 直接无限递归。校验要放在任何改动之前。
-
-第二，一个设计上的修正。我原来只给 Document 提供了 `add` / `insert` / `remove`，它们都会登记或注销 id 索引。写 `ungroup` 的 undo 时就报 `id already exists`——因为被提升到父级的子节点一直还在索引里，再 insert 一次就重复登记了。这才意识到"新建"和"移动"是两件事，于是又加了 `detach` / `reparent`，只改结构不动索引。
-
-第三，undo 要原位恢复。group 的 undo 得按原下标升序放回，降序插会把顺序插反；front / back 的 undo 要恢复原下标。兄弟顺序不是细节，它本身就是 z-order。
-
-另外任务书 §4.2 规定画布根级的容器不能 ungroup，所以 §6.1 那个根级的 `g#flowchart` 实际上解不开。我照规格实现了，也在这里记一笔。
-
-### P7 读写 SVG
-
-为了让程序真的能产出文件，得自己写个 XML 解析器。没引第三方库，因为要处理的语法子集不大（声明、注释、自闭合、嵌套、单双引号属性、实体），自己写两百行比较可控；不支持的 CDATA 和 DTD 写在注释里了。
-
-自动补 id 这块差点写错。如果边解析边分配，会出现"先给匿名 `<rect>` 分了 rect1，后面又读到一个显式 `id="rect1"`"的撞车。所以改成两遍：第一遍收集文件里所有显式 id，第二遍才分配并跳过它们。
-
-未知属性（font-size、text-anchor 这些）我用 `restoreAttribute` 原样留着，save 的时候不丢。这样读一个带字号的 SVG、改个坐标、存回去，字号还在。`transform` 目前只保留不应用，这是已知限制。
-
-### P8 错误文案
-
-功能齐了之后，专门拿一个阶段把 §4.2 那张表里的错误文案逐条对上。做法是写一张对照表测试，期望值带上 `error: ` 前缀，就是用户在终端里真正看到的那一行。
-
-为了这个，我把 Repl 里自己拼前缀的代码抽成了 `ErrorFormatter`，让测试和线上走同一个格式化路径。不然很容易出现"测试断言 message、线上打印多一层前缀"的错位。
-
-表里第 6 条 `cannot ungroup composite shape` 这段实现不了，因为 box 是下一阶段的类型，现在 `create box` 会先报 unknown shape type。我写了条测试把这个现状固定下来，也在这里说明一下，免得看起来像漏掉了。
-
-### P9 测试分层
-
-前面都是写到哪测到哪，这一段按课件 TDD 的四层策略回头盘点，发现端到端层和调用者层基本是空的。
-
-端到端为空，根子不是没写测试，是 `Repl` 写成了不可测：输入输出硬编码 `process.stdin` 和 `console.log`。改成构造参数接收 input/output 流、`start()` 返回 Promise 之后，就能用内存流跑一次完整会话了。课件说"可测试的两个条件：控制输入、观测输出"，这次算是有体会——不可测往往是设计的问题。
-
-调用者层用假命令测：`FakeCommand` 只往数组里记一笔，不碰真实图形，专门验证命令栈的进出栈顺序、redo 清空、io 后禁止这些编排行为。
-
-还顺手改了条会过期的断言。P2 时我写过 `expect(registry.get('create')).toBeUndefined()`，意思是"create 还没实现"，到 P3 实现完它就红了。教训是断言要表达稳定的契约，别表达当前进度。
-
-### P10 文档和自查
-
-写文档的时候我想验证依赖规则有没有真的做到，就写了个脚本扫 import。第一次跑出来：
-
-```
-app -> commands   2 处
-commands -> app  29 处
-```
-
-`app` 里的 `CommandExecutor` 和 `UndoableCommand` 引用了 `commands/Command.ts` 里的命令契约，跟 `commands -> app` 构成了模块级循环。平时没出过 bug，因为这两处都是 `import type`，编译就擦掉了。但类型层面的循环会把真实耦合藏起来，跟文档里写的单向依赖不符。
-
-改法是把命令契约（`Command` / `CommandKind`）和 `UndoableCommand` 挪到 `src/app/`，命令层从 app 取。改完脚本输出"无表外依赖"。
-
-后来我把这个检查固化成了 `npm run check:arch`，跟 typecheck、test、build 一起进了提交前的清单。
+`modified-star` 的状态在 `ModifiedStar` 的字段里，不是模块级变量。规则见 ADR 3。它和 `(box)` 互不 import。注册顺序是先 box 再 star，所以同一行先 `(box)` 再 `*`。
 
 ---
 
-### P11 交叉审查与修复
+## 七、ADR
 
-写完文档之后，我又让另一个 AI 按任务书把项目完整审了一遍，它报了两个严重问题。我没直接照改，先自己验证。
+### 1. 属性处理器：冲突就拒绝，一次 set 用一份子树快照
 
-第一个：`group` 不检查重复成员。敲 `group g1 r1 r1` 会把同一个对象加进容器两次，`tree` 打印两行 `rect#r1`，`save` 写出两个相同 id 的 `<rect>`，违反了 §2 的「id 强制唯一」。
+处理器要能改子部件，还要保证一次 `set` 是一个 undo，中途抛错不能把文档改脏。
 
-第二个更严重：`ungroup` 撤销时用 `new Group(...)` 重建了一个容器。先前命令（`delete`、`front`、`addto`）的撤销里存着"父容器"的引用，对象一换，那些引用就指向了已经脱离文档树的孤儿节点。表现是图形从 `tree` 里消失，但 `show` 还能查到——不会报错，只是数据悄悄坏了。
+我让 `handles` 只做判断。`SetCommand.execute` 收集所有返回 true 的处理器。零个，走原来的白名单。一个，在调用 `apply` 之前用 `AttributeSnapshot` 记下这棵子树每个节点的几何和 presentation。`apply` 抛错就把快照写回去，异常继续往外抛，`CommandStack` 只有在 `execute` 正常返回后才入栈，所以 undo 历史不变。成功的话，这份快照留给 `undo`，处理器只负责两句反馈。
 
-验证办法是先写回归测试，再把旧代码 stash 起来跑一遍：4 条失败；恢复修复后 6 条全过。确认不是误报，才开始改。
+两个都命中时直接报错，不按优先级挑一个，也不串起来执行。优先级以后若要加，可以再改这个决定；现在没有明确的先后，偷偷选一个会盖掉另一个。
 
-顺带按它的建议，把散落在 8 个文件里的 11 处 `instanceof Group` 收敛成 `Shape` 上的多态查询（`isContainer()` / `childShapes()` / `contains()`），对应 §2.1 禁止类型分派那一条。
+没把 `label` 放进内核白名单。普通矩形执行 `set r1 label x` 仍然是 `unknown attribute`。
 
-测试 207 → 213。
+### 2. box 读回来：缺零件就拒绝，没装插件才降级
+
+缺 `n1-rect` 或 `n1-label`，或者 id 对了但类型不对，有两种做法：整份文件拒绝，或者警告后当成普通 `g`。我选拒绝。降级会留下一个不完整的 box，后面的 `set fill` 不知道该改谁。没装插件时的降级是另一回事，那时根本没有 box 这个类型，按 `g` 读是任务书要求的。
+
+重复 id 不能靠降级消掉，`SvgReader.ensureId` 遇到已经用过的显式 id 会抛 `DuplicateIdError`，`read` 不会替换当前文档。
+
+子部件 id 固定是 `<id>-rect` 和 `<id>-label`。`document.add` 会先把整棵子树的 id 检查一遍，再登记。冲突时容器和子部件都不会留下。
+
+### 3. 星号按「和上次保存的内容是否一致」，祖先也标
+
+另一种做法是「执行过编辑命令就打星，undo 也不摘」。那样 undo 回到保存点以后星号还在，和「没保存的修改」对不上。我改成在 `init` / `read` / 成功的 `save` 时记一份基线（每个 id 一个 `stateKey`，外加画布尺寸）。渲染时再比。undo 回到那份内容，星号自己消失。
+
+新建的图形不在基线里，所以一创建就有星号。子节点变了，父节点那一行也标。只标子节点的话，折叠着看容器看不出有没有没保存的修改。
+
+多个标签的拼接顺序就是注册顺序，不在渲染器里写死谁先谁后。
+
+### 4. 清单在 activate 成功之后对，对不上就整单撤回
+
+也可以在登记每个扩展时立刻和清单比对。那样插件得按声明的顺序登记，多登记一个马上失败，测试也不好写。我让插件先正常 `activate`，登记进一张暂存表。返回之后再比名字集合。不一致、或者 `activate` 中途抛错，就把这张暂存表里的登记全部撤掉，然后继续下一个插件。
+
+配置文件本身解析失败或结构不对，不加载其中任何一项，内置命令和六种图形照常可用。
 
 ---
 
-## 三、一致性自查
+## 八、和 AI 一起改的地方
 
-**问题一：实际目录和方案是否一致？**
+这一阶段用编程助手改代码。阶段划分和验收标准是我定的，生成出来的东西我用原来的 213 个测试，加上新写的插件测试，对过以后才留。下面是对过、并且改过的几处。
 
-一致。六个模块目录都在，职责跟文档里写的一样，没有遗留的临时目录。
+树的标题。第一版让 box 的 `label()` 直接返回 `box#n1`，`tree` 就变成 `box#n1 (box)`。任务书版本 B 的树是 `g#n1 (box)`，移动的反馈才是 `box#n2 moved by`。所以树用单独的 `treeLabel()`，命令反馈继续用 `label()`。行尾的 `(box)` 只由装饰器追加，渲染器不写这个词。
 
-有一处修订：`Command.ts` 本来在 `src/commands/`，P10 自查时挪到了 `src/app/`。原因见问题二。
+`set` 的撤销。助手一开始倾向让处理器返回一个自己的 undo 函数。box 的 fill 只改一个子节点，这样写得通，但「改到一半抛错」测不过：抛错前矩形的 fill 已经变了，undo 栈又还没推进去。改成执行前拍子树快照，失败写回，成功也用同一份快照做 undo。Phase 1 那种「只记一个属性旧值」的路径还留着，没有处理器命中时走原来的代码。
 
-**问题二：依赖方向的规则有没有被违反？**
+`dir` 的空格。示例里 `[DIR]` 和 `[FILE]` 看起来像在对齐名字。正文写的是标记后面两个空格。我按正文做，两组都是两个空格，不按标签宽度补齐。测试把这个字符串锁死了。
 
-违反过，已经修了。
+加载器的相对路径。测试把配置写到系统临时目录，插件却用 `./plugins/ok` 这种相对路径，结果报找不到。相对路径必须相对配置文件所在目录。正式的 `plugins.config.json` 放在仓库根，`./plugins/command-stats` 就是对的。
 
-就是上面 P10 说的那次：脚本第一次扫出来 `app -> commands` 有 2 处，跟 `commands -> app` 形成循环。处理方式是把命令契约上移到 `app/`。现在 `npm run check:arch` 输出"依赖方向检查通过：无表外依赖"。
-
-这 2 处都是 `import type`，运行时确实没出过问题。但我还是改了，因为文档里写的规则如果代码没做到，那文档就是假的。
+还有一处是读入重复 id。Phase 1 遇到撞车的显式 id 会再分配一个新的。box 的要求是重复 id 必须拒绝整份文件，不能靠改名混过去。`ensureId` 现在直接抛错。原来的「自动补 id 避开已经声明的 id」还在，只是两个元素写了同一个 id 时不再沉默。
 
 ---
 
-## 四、功能完整性和质量保证手段
-
-### 1. 功能是否完整
-
-公告里列的能力，对应的命令如下：
-
-| 要求 | 命令 |
-|---|---|
-| 创建 | `init`、`create`（rect / circle / ellipse / line / text / g，支持 `in` 子句） |
-| 读取 | `read` |
-| 保存 | `save`（无参数时存回读入的路径） |
-| 移动 | `move` |
-| 缩放 | `scale` |
-| 分组 | `group`、`ungroup`、`addto` |
-| 删除 | `delete` |
-| 属性修改 | `set` |
-| 结构查看 | `tree`、`show` |
-| 撤销重做 | `undo`、`redo` |
-| 其他 | `canvas`（画布尺寸）、`front` / `back`（层级）、`help` |
-
-一共 19 条，跟任务书 §3 的命令表一一对应。有条测试专门断言注册表"不缺、不多"，以后谁加了命令忘了登记会先红。
-
-没做的是 §4.4 的 `box` 复合图形和 ShapeProvider 插件机制，任务书写明属于下一阶段。
-
-### 2. 测试怎么分的
-
-按课件的四层策略：
-
-| 层 | 测什么 | 数量 |
-|---|---|---|
-| 接收者层 | 图形几何、Document 的索引和父子关系 | 30 |
-| 命令层 | 每条命令执行后的状态、undo 是否精确还原、错误文案 | 116 |
-| 调用者层 | 命令栈的编排（用假命令，不碰真实图形） | 9 |
-| 端到端 | 走真实 Repl 的完整链路（内存流替换 stdio） | 8 |
-| 支撑层 | 分词、文本渲染、XML 解析 | 28 |
-| 规格一致性 | 注册表是否恰好等于 §3 的 19 条命令 | 22 |
-
-加起来 213 个，`npm test` 全绿。
-
-分层的好处是排查方向明确：命令层红了先看接收者层是不是本来就坏了，范围能快速缩小。端到端只验链路通不通，不重复验业务细节，不然改一处要改三个地方。
-
-### 3. 命令覆盖情况
-
-| 命令 | 正常路径 | 出错路径 | undo |
-|---|:-:|:-:|:-:|
-| init / read / save / canvas | 有 | 有 | —（文档类，执行后禁止 undo） |
-| create | 有 | 有 | 有 |
-| delete | 有 | 有 | 有 |
-| move | 有 | 有 | 有 |
-| scale | 有 | 有 | 有 |
-| set | 有 | 有 | 有 |
-| group | 有 | 有 | 有 |
-| ungroup | 有 | 有 | 有 |
-| addto | 有 | 有 | 有 |
-| front / back | 有 | 有 | 有 |
-| tree / show / help | 有 | 有 | —（显示类，不进栈） |
-| undo / redo | 有 | 有 | —（自身不进栈） |
-
-### 4. §4.2 错误文案
-
-| 场景 | 输出 | 状态 |
-|---|---|---|
-| id 已存在 | `error: id already exists: r1` | 已实现 |
-| id 不存在 | `error: no such shape: r9` | 已实现 |
-| in 目标不存在 | `error: no such container: node9` | 已实现 |
-| in 目标不是容器 | `error: not a container: start` | 已实现 |
-| 未注册类型 | `error: unknown shape type: hexagon (is the plugin loaded?)` | 已实现 |
-| ungroup 复合图形 | `error: cannot ungroup composite shape: n1` | 下一阶段 |
-| group 含容器与其子孙 | `error: cannot group a container into its own descendant: markers` | 已实现 |
-| ungroup 根级容器 | `error: cannot ungroup top-level container: scene` | 已实现 |
-| scale 非正数 | `error: scale factor must be positive` | 已实现 |
-| 文件读不到 | `error: cannot read file: a.svg` | 已实现 |
-| 文件写不了 | `error: cannot write file: a.svg` | 已实现 |
-| 没有文档 | `error: no document. use 'init' or 'read' first` | 已实现 |
-
-12 条里对上 11 条，剩下那条按规格属于下一阶段。
-
-### 5. 怎么跑
+## 九、怎么确认没改坏
 
 ```powershell
 npm install
-npm test           # 213 个测试
-npm run typecheck  # 严格模式类型检查
-npm run check:arch # 依赖方向检查
-npm run build      # 编译到 dist/
-npm run cli        # 启动编辑器
+npm test
+npm run typecheck
+npm run check:arch
+npm run build
+npm run metrics
 ```
+
+`npm test` 包含原来的 Phase 1 测试，以及加载器、`stats`、`dir`、`box`、星号、大纲的测试。
+
+不装新插件：
+
+```powershell
+npm run cli
+```
+
+装上这一阶段的插件，两种方式：
+
+```powershell
+npm run cli -- --code-plugins
+npm run cli -- --config plugins.config.json
+```
+
+回放用的命令在 `doc/transcript/`。`cli-1.txt` 不要装树标签，否则 `tree` 会多出星号。`cli-box.txt` 需要 box。`dir` 不要拿仓库根目录对输出，文件一变结果就变，测试里用的是临时目录。
+
+规模数字由 `scripts/metrics.mjs` 对比 tag `final` 和当前 `HEAD` 写到 `docs/metrics/report.md`。VSCode 扩展单独一列。相对 `final`：内核多 173 行、圈复杂度多 51；装配处多 524 行；插件 662 行；扩展 255 行。这四行是脚本写出来的，我抄过来方便看。
