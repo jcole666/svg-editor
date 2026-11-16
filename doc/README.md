@@ -75,45 +75,71 @@ package "Phase 1" {
 ```plantuml
 @startuml
 skinparam componentStyle rectangle
+skinparam linetype polyline
+left to right direction
 
-package "内核" {
-  component "extension\n四个扩展点" as ext
+component "main" as main
+component "cli" as cli
+
+package "装配处 src/host" as host {
+  component "codePlugins.ts\n方式 A 的名单" as code
+  component "PluginLoader\n按字符串加载" as loader
+  component "builtinHub\n默认装 19 条命令和六种图形" as boot
+}
+
+package "插件 plugins/" as plugins {
+  component "shape-builtin" as shapes
+  component "box" as boxp
+  component "stats / dir / star" as extra
+}
+
+package "内核" as kernel {
   component "commands\n19 条内置命令的类" as cmd
   component "view" as view
   component "io" as io
+  component "extension\n四个扩展点" as ext
   component "app" as app
   component "model" as model
-  cmd --> ext
-  view --> ext
-  io --> ext
-  ext --> app
-  ext --> model
-  cmd --> app
-  cmd --> view
-  cmd --> io
-  cmd --> model
-  view --> model
-  io --> model
-  app --> model
 }
 
-package "装配处 src/host" {
-  component "builtinHub\n默认装 19 条命令和六种图形" as boot
-  component "PluginLoader\n按字符串加载" as loader
-  component "codePlugins.ts\n方式 A 的名单" as code
-}
-
-package "插件 plugins/" {
-  component "shape-builtin" as shapes
-  component "stats / dir / box / star" as extra
-}
+main --> cli
+main --> boot
+main --> code
+main --> loader
+cli --> boot
+cli --> app
+cli --> ext
 
 boot --> ext
 boot --> shapes
 boot --> cmd
 code --> loader
 loader --> extra
+loader --> boxp
+loader --> ext
+
+shapes --> ext
+shapes --> model
+shapes --> io
+boxp --> ext
+boxp --> model
+boxp --> io
 extra --> ext
+extra --> model
+extra --> app
+
+cmd --> ext
+view --> ext
+io --> ext
+ext --> app
+ext --> model
+cmd --> app
+cmd --> view
+cmd --> io
+cmd --> model
+view --> model
+io --> model
+app --> model
 @enduml
 ```
 
