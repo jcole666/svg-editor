@@ -79,10 +79,22 @@ skinparam componentStyle rectangle
 package "内核" {
   component "extension\n四个扩展点" as ext
   component "commands\n19 条内置命令的类" as cmd
-  component "app / view / io / model" as core
+  component "view" as view
+  component "io" as io
+  component "app" as app
+  component "model" as model
   cmd --> ext
-  cmd --> core
-  core --> ext
+  view --> ext
+  io --> ext
+  ext --> app
+  ext --> model
+  cmd --> app
+  cmd --> view
+  cmd --> io
+  cmd --> model
+  view --> model
+  io --> model
+  app --> model
 }
 
 package "装配处 src/host" {
@@ -98,6 +110,7 @@ package "插件 plugins/" {
 
 boot --> ext
 boot --> shapes
+boot --> cmd
 code --> loader
 loader --> extra
 extra --> ext
