@@ -23,7 +23,7 @@ npm run compile
 
 用 VSCode 打开 `vscode/svg-outline` 这个目录，按 F5。扩展开发宿主里打开 `fixtures`，`example.svg` 右边会出现 `[]`，`plain.txt` 和文件夹没有。打开 `example.svg`，左下角大纲能看到 `svg`、`g#flow`、`rect#start`，没有 id 的文字只显示 `text`。点 `rect#start` 会跳到对应那一行。把 XML 写成一半时大纲清空，扩展不会崩。
 
-截图在 `docs/images/vscode-svg-outline.png`。资源管理器里只有 `example.svg` 带 `[]`，`plain.txt` 没有。大纲是 `svg`、`g#flow`、`rect#start`、`g#nested`、`text`，点 `rect#start` 会落到第 3 行。
+标记截图在 `docs/images/vscode-svg-badge.png`，大纲截图在 `docs/images/vscode-svg-outline.png`。资源管理器里只有 `example.svg` 带 `[]`，`plain.txt` 没有。大纲是 `svg`、`g#flow`、`rect#start`、`g#nested`、`text`，点 `rect#start` 会落到第 3 行。
 
 ### VSCode 和插件各管什么
 
