@@ -70,6 +70,8 @@ package "Phase 1" {
 @enduml
 ```
 
+![重构前（Phase 1）模块依赖](architecture-phase1.png)
+
 ```plantuml
 @startuml
 skinparam componentStyle rectangle
@@ -101,6 +103,8 @@ loader --> extra
 extra --> ext
 @enduml
 ```
+
+![重构后（Phase 2）模块依赖](architecture-phase2.png)
 
 依赖方向用 `npm run check:arch` 扫真实 import。内核可以依赖扩展点接口，不能依赖某个插件。插件可以依赖 `model`、`app`、`extension`、`io`，以及 `UsageError`。不能依赖 `host`、`cli`，也不能 import 另一个插件。`src/host` 和 `src/main.ts` 是组合根，允许认识具体插件。
 
